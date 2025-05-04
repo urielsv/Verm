@@ -25,4 +25,62 @@ Factor * ConstantFactorSemanticAction(Constant * constant);
 Factor * ExpressionFactorSemanticAction(Expression * expression);
 Program * ExpressionProgramSemanticAction(CompilerState * compilerState, Expression * expression);
 
+Constant * StringConstantSemanticAction(char * value);
+Constant * BooleanConstantSemanticAction(bool value);
+Constant * TimestampConstantSemanticAction(time_t value);
+Constant * AddressConstantSemanticAction(char * address, AddressKind kind);
+Constant * PacketConstantSemanticAction(char * data, size_t length);
+
+/* Expressions and Factors */
+Factor * AddressTypeFactorSemanticAction(char * address);
+Factor * PacketTypeFactorSemanticAction(char * data);
+Factor * FieldFactorSemanticAction(Field * field);
+
+/* Programs */
+Program * StatementProgramSemanticAction(CompilerState * state, Statement * statement);
+Program * MultiStatementProgramSemanticAction(CompilerState * state, Program * program, Statement * statement);
+
+/* Fields */
+Field * FieldSemanticAction(char * name, char * protocol);
+Field * FieldSemanticActionWithAlias(char * name, char * alias);
+Field * FieldSemanticActionWithFullAlias(char * name, char * protocol, char * alias);
+FieldList * createFieldList(Field * field);
+FieldList * appendToFieldList(FieldList * list, Field * newField);
+
+/* Conditions */
+Condition * ComparisonConditionSemanticAction(Expression * left, Expression * right, ComparisonOperator op);
+Condition * LogicalConditionSemanticAction(Condition * left, Condition * right, LogicalOperator op);
+Condition * SameConditionSemanticAction(char * field);
+Condition * DifferentConditionSemanticAction(char * field);
+Condition * CountConditionSemanticAction(char * field, ComparisonOperator op, int value);
+Condition * TimespanConditionSemanticAction(ComparisonOperator op, int seconds);
+Condition * EmptyHavingClauseSemanticAction();
+Condition * HavingClauseSemanticAction(Condition * condition);
+Condition * ParenthesizedConditionSemanticAction(Condition * condition);
+Condition * IdentifierConditionSemanticAction(char * identifier);
+Condition * FieldConditionSemanticAction(char * field1, char * field2);
+
+/* Statements */
+Statement * CaptureStatementSemanticAction(char * source, Condition * condition);
+Statement * ExtractStatementSemanticAction(FieldList * fields, char * source, Condition * condition);
+Statement * FilterStatementSemanticAction(Condition * condition);
+Statement * AlertStatementSemanticAction(Condition * trigger, char * message);
+Statement * GroupStatementSemanticAction(FieldList * group_fields, Condition * having);
+Statement * DefineStatementSemanticAction(char * pattern_name, PatternCondition * conditions, int count);
+Statement * ImportStatementSemanticAction(char * filename);
+Statement * ExportStatementSemanticAction(char * data, char * filename);
+
+/* Wrappers */
+Statement * CaptureStatementSemanticActionWrapper(Statement * stmt);
+Statement * ExtractStatementSemanticActionWrapper(Statement * stmt);
+Statement * FilterStatementSemanticActionWrapper(Statement * stmt);
+Statement * AlertStatementSemanticActionWrapper(Statement * stmt);
+Statement * GroupStatementSemanticActionWrapcper(Statement * stmt);
+Statement * DefineStatementSemanticActionWrapper(Statement * stmt);
+Statement * ImportExportStatementSemanticActionWrapper(Statement * stmt);
+
+
+/* utils */
+PatternCondition* convertConditionsToPatterns(Condition* cond); 
+int countConditions(Condition* cond);
 #endif

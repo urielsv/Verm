@@ -6,42 +6,34 @@
 
 // You touch this, and you die.
 %define api.value.union.name SemanticValue
-
 %union {
-	/** Terminals. */
-	
-	char * string;
-	int integer;
-	Token token;
+    /** Terminals */
+    char* string;
+    int integer;
+    Token token;
 
-	/** Non-terminals. */
-
-	Constant * constant;
-	Expression * expression;
-	Factor * factor;
-	Program * program;
-	Statement * statement;
-	FieldList * fieldList;
-	Condition * condition;
+    /** Non-terminals */
+    Constant* constant;
+    Expression* expression;
+    Factor* factor;
+    Program* program;
+    Statement* statement;
+    Field* field;
+    FieldList* fieldList;
+    Condition* condition;
 }
 
-/**
- * Destructors. This functions are executed after the parsing ends, so if the
- * AST must be used in the following phases of the compiler you shouldn't used
- * this approach for the AST root node ("program" non-terminal, in this
- * grammar), or it will drop the entire tree even if the parse succeeds.
- *
- * @see https://www.gnu.org/software/bison/manual/html_node/Destructor-Decl.html
- */
+/** Destructors */
 %destructor { releaseConstant($$); } <constant>
 %destructor { releaseExpression($$); } <expression>
 %destructor { releaseFactor($$); } <factor>
+%destructor { releaseField($$); } <field>
 %destructor { free($$); } <string>
 %destructor { releaseStatement($$); } <statement>
 %destructor { releaseFieldList($$); } <fieldList>
 %destructor { releaseCondition($$); } <condition>
 
-/** Terminals. */
+/** Tokens */
 %token <integer> INTEGER
 %token <string> IDENTIFIER STRING
 
@@ -64,7 +56,7 @@
 %token <token> IF ELSE WHILE
 
 /** Data type tokens */
-%token <token> PACKET_TYPE ADDRESS_TYPE
+%token <token> PACKET_TYPE ADDRESS_TYPE BOOLEAN TIMESTAMP
 
 /** Operator tokens */
 %token <token> ADD SUB MUL DIV
@@ -74,25 +66,24 @@
 /** Delimiter tokens */
 %token <token> OPEN_PARENTHESIS CLOSE_PARENTHESIS
 %token <token> OPEN_BRACE CLOSE_BRACE
-%token <token> SEMICOLON COMMA
+%token <token> SEMICOLON COMMA DOT
 
 /** Error token */
 %token <token> UNKNOWN
 
-/** Non-terminals. */
+/** Non-terminals */
 %type <program> program
 %type <statement> statement capture_statement extract_statement filter_statement
-%type <fieldList> field_list field
-%type <condition> condition comparison_expression logical_expression
+%type <statement> alert_statement group_statement define_statement import_export_statement
+%type <condition> condition having_clause pattern_conditions pattern_condition
+%type <condition> comparison_expression logical_expression
 %type <expression> expression
 %type <factor> factor
 %type <constant> constant
+%type <fieldList> field_list
+%type <field> field
 
-/**
- * Precedence and associativity.
- *
- * @see https://www.gnu.org/software/bison/manual/html_node/Precedence.html
- */
+/** Precedence and associativity */
 %left COMMA
 %right ASSIGN
 %left OR
@@ -105,66 +96,174 @@
 
 %%
 
-// IMPORTANT: To use λ in the following grammar, use the %empty symbol.
+program: 
+    statement { 
+        $$ = StatementProgramSemanticAction(currentCompilerState(), $1); 
+    }
+    | program statement { 
+        $$ = MultiStatementProgramSemanticAction(currentCompilerState(), $1, $2); 
+    }
+    ;
 
-program: statement                                    { $$ = StatementProgramSemanticAction(currentCompilerState(), $1); }
-	| program statement                              { $$ = MultiStatementProgramSemanticAction(currentCompilerState(), $1, $2); }
-	;
+statement:
+    capture_statement { $$ = CaptureStatementSemanticActionWrapper($1); }
+    | extract_statement { $$ = ExtractStatementSemanticActionWrapper($1); }
+    | filter_statement { $$ = FilterStatementSemanticActionWrapper($1); }
+    | alert_statement { $$ = AlertStatementSemanticActionWrapper($1); }
+    | group_statement { $$ = GroupStatementSemanticActionWrapper($1); }
+    | define_statement { $$ = DefineStatementSemanticActionWrapper($1); }
+    | import_export_statement { $$ = ImportExportStatementSemanticActionWrapper($1); }
+    ;
 
-statement: capture_statement                         { $$ = $1; }
-	| extract_statement                             { $$ = $1; }
-	| filter_statement                              { $$ = $1; }
-	;
+alert_statement:
+    ALERT WHEN condition SEND STRING SEMICOLON {
+        $$ = AlertStatementSemanticAction($3, $5); 
+    }
+    ;
 
-capture_statement: CAPTURE FROM STRING WHERE condition SEMICOLON 
-													{ $$ = CaptureStatementSemanticAction($3, $5); }
-	;
+group_statement:
+    GROUP BY field_list having_clause SEMICOLON {
+        $$ = GroupStatementSemanticAction($3, $4); 
+    }
+    ;
 
-extract_statement: EXTRACT OPEN_BRACE field_list CLOSE_BRACE 
-													FROM STRING 
-													WHERE condition SEMICOLON          { $$ = ExtractStatementSemanticAction($3, $6, $8); }
-	;
+having_clause:
+    %empty { $$ = EmptyHavingClauseSemanticAction(); }
+    | HAVING condition { $$ = HavingClauseSemanticAction($2); }
+    ;
 
-filter_statement: FILTER condition SEMICOLON        { $$ = FilterStatementSemanticAction($2); }
-	;
+define_statement:
+    DEFINE IDENTIFIER OPEN_BRACE pattern_conditions CLOSE_BRACE SEMICOLON {
+        PatternCondition* patterns = convertConditionsToPatterns($4);
+        $$ = DefineStatementSemanticAction($2, patterns, countConditions($4));
+        free(patterns);
+    }
+    ;
 
-field_list: field                                  { $$ = $1; }
-	| field_list COMMA field                       { $$ = FieldListSemanticAction($1, $3); }
-	;
+pattern_condition:
+    SAME IDENTIFIER { $$ = SamePatternConditionSemanticAction($2); }
+    | DIFFERENT IDENTIFIER { $$ = DifferentPatternConditionSemanticAction($2); }
+    | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS EQUALS INTEGER {
+        $$ = CountPatternConditionSemanticAction($3, EQUALS_OP, $6); 
+    }
+    | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS NOT_EQUALS INTEGER {
+        $$ = CountPatternConditionSemanticAction($3, NOT_EQUALS_OP, $6); 
+    }
+    | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS LESS_THAN INTEGER {
+        $$ = CountPatternConditionSemanticAction($3, LESS_THAN_OP, $6); 
+    }
+    | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS GREATER_THAN INTEGER {
+        $$ = CountPatternConditionSemanticAction($3, GREATER_THAN_OP, $6); 
+    }
+    | TIMESPAN EQUALS INTEGER { $$ = TimespanConditionSemanticAction(EQUALS_OP, $3); }
+    | TIMESPAN NOT_EQUALS INTEGER { $$ = TimespanConditionSemanticAction(NOT_EQUALS_OP, $3); }
+    | TIMESPAN LESS_THAN INTEGER { $$ = TimespanConditionSemanticAction(LESS_THAN_OP, $3); }
+    | TIMESPAN GREATER_THAN INTEGER { $$ = TimespanConditionSemanticAction(GREATER_THAN_OP, $3); }
+    ;
 
-field: IDENTIFIER                                  { $$ = FieldSemanticAction($1, NULL); }
-	| IDENTIFIER AS IDENTIFIER                     { $$ = FieldSemanticAction($1, $3); }
-	;
+pattern_conditions:
+    pattern_condition { 
+        $$ = $1; 
+    }
+    | pattern_conditions COMMA pattern_condition { 
+        $$ = MultiplePatternConditionsSemanticAction($1, $3); 
+    }
+    ;
 
-condition: comparison_expression                    { $$ = $1; }
-	| logical_expression                           { $$ = $1; }
-	| OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = $2; }
-	;
+import_export_statement:
+    IMPORT FROM STRING SEMICOLON { 
+        $$ = ImportStatementSemanticAction($3); 
+    }
+    | EXPORT STRING TO STRING SEMICOLON { 
+        $$ = ExportStatementSemanticAction($2, $4); 
+    }
+    ;
+
+field:
+    IDENTIFIER { $$ = FieldSemanticAction($1, NULL); }
+    | IDENTIFIER DOT IDENTIFIER { $$ = FieldSemanticAction($1, $3); }
+    | IDENTIFIER AS IDENTIFIER { $$ = FieldSemanticActionWithAlias($1, $3); }
+    | IDENTIFIER DOT IDENTIFIER AS IDENTIFIER { 
+        $$ = FieldSemanticActionWithFullAlias($1, $3, $5); 
+    }
+    ;
+
+condition:
+    comparison_expression { $$ = $1; }
+    | logical_expression { $$ = $1; }
+    | OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = ParenthesizedConditionSemanticAction($2); }
+    | IDENTIFIER { $$ = IdentifierConditionSemanticAction($1); }
+    | IDENTIFIER DOT IDENTIFIER { $$ = FieldConditionSemanticAction($1, $3); }
+    | COUNT OPEN_PARENTHESIS condition CLOSE_PARENTHESIS {
+        $$ = CountConditionSemanticAction($3, EQUALS_OP, 0); 
+    }
+    | SAME IDENTIFIER { $$ = SameConditionSemanticAction($2); }
+    | DIFFERENT IDENTIFIER { $$ = DifferentConditionSemanticAction($2); }
+    | TIMESPAN EQUALS INTEGER { $$ = TimespanPatternConditionSemanticAction(EQUALS_OP, $3); }
+    | TIMESPAN NOT_EQUALS INTEGER { $$ = TimespanPatternConditionSemanticAction(NOT_EQUALS_OP, $3); }
+    | TIMESPAN LESS_THAN INTEGER { $$ = TimespanPatternConditionSemanticAction(LESS_THAN_OP, $3); }
+    | TIMESPAN GREATER_THAN INTEGER { $$ = TimespanPatternConditionSemanticAction(GREATER_THAN_OP, $3); }
+    ;
+
+capture_statement: 
+    CAPTURE FROM STRING WHERE condition SEMICOLON {
+        $$ = CaptureStatementSemanticAction($3, $5); 
+    }
+    ;
+
+extract_statement: 
+    EXTRACT OPEN_BRACE field_list CLOSE_BRACE FROM STRING WHERE condition SEMICOLON {
+        $$ = ExtractStatementSemanticAction($3, $6, $8); 
+    }
+    ;
+
+filter_statement: 
+    FILTER condition SEMICOLON { 
+        $$ = FilterStatementSemanticAction($2); 
+    }
+    ;
+
+field_list: 
+    field { $$ = createFieldList($1); }
+    | field_list COMMA field { $$ = appendToFieldList($1, $3); }
+    ;
 
 logical_expression:
-	condition AND condition                        { $$ = LogicalConditionSemanticAction($1, $3, AND_OP); }
-	| condition OR condition                       { $$ = LogicalConditionSemanticAction($1, $3, OR_OP); }
-	;
+    condition AND condition { $$ = LogicalConditionSemanticAction($1, $3, AND_OP); }
+    | condition OR condition { $$ = LogicalConditionSemanticAction($1, $3, OR_OP); }
+    ;
 
 comparison_expression: 
-	expression EQUALS expression                   { $$ = ComparisonSemanticAction($1, $3, EQUALS); }
-	| expression NOT_EQUALS expression             { $$ = ComparisonSemanticAction($1, $3, NOT_EQUALS); }
-	| expression LESS_THAN expression              { $$ = ComparisonSemanticAction($1, $3, LESS_THAN); }
-	| expression GREATER_THAN expression           { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN); }
-	;
+    expression EQUALS expression { $$ = ComparisonSemanticAction($1, $3, EQUALS_OP); }
+    | expression NOT_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, NOT_EQUALS_OP); }
+    | expression LESS_THAN expression { $$ = ComparisonSemanticAction($1, $3, LESS_THAN_OP); }
+    | expression GREATER_THAN expression { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN_OP); }
+    ;
 
-expression: expression[left] ADD expression[right]					{ $$ = ArithmeticExpressionSemanticAction($left, $right, ADDITION); }
-	| expression[left] DIV expression[right]						{ $$ = ArithmeticExpressionSemanticAction($left, $right, DIVISION); }
-	| expression[left] MUL expression[right]						{ $$ = ArithmeticExpressionSemanticAction($left, $right, MULTIPLICATION); }
-	| expression[left] SUB expression[right]						{ $$ = ArithmeticExpressionSemanticAction($left, $right, SUBTRACTION); }
-	| factor														{ $$ = FactorExpressionSemanticAction($1); }
-	;
+expression: 
+    expression ADD expression { $$ = ArithmeticExpressionSemanticAction($1, $3, ADDITION); }
+    | expression DIV expression { $$ = ArithmeticExpressionSemanticAction($1, $3, DIVISION); }
+    | expression MUL expression { $$ = ArithmeticExpressionSemanticAction($1, $3, MULTIPLICATION); }
+    | expression SUB expression { $$ = ArithmeticExpressionSemanticAction($1, $3, SUBTRACTION); }
+    | factor { $$ = FactorExpressionSemanticAction($1); }
+    ;
 
-factor: OPEN_PARENTHESIS expression CLOSE_PARENTHESIS				{ $$ = ExpressionFactorSemanticAction($2); }
-	| constant														{ $$ = ConstantFactorSemanticAction($1); }
-	;
+factor: 
+    OPEN_PARENTHESIS expression CLOSE_PARENTHESIS { $$ = ExpressionFactorSemanticAction($2); }
+    | constant { $$ = ConstantFactorSemanticAction($1); }
+    | IDENTIFIER DOT IDENTIFIER { 
+        Field* f = FieldSemanticAction($1, $3);
+        $$ = FieldFactorSemanticAction(f);
+    }
+    | ADDRESS_TYPE STRING { $$ = AddressTypeFactorSemanticAction($2); }
+    | PACKET_TYPE STRING { $$ = PacketTypeFactorSemanticAction($2); }
+    ;
 
-constant: INTEGER													{ $$ = IntegerConstantSemanticAction($1); }
-	;
+constant: 
+    INTEGER { $$ = IntegerConstantSemanticAction($1); }
+    | STRING { $$ = StringConstantSemanticAction($1); }
+    | TIMESTAMP { $$ = TimestampConstantSemanticAction($1); }
+    | BOOLEAN { $$ = BooleanConstantSemanticAction($1); }
+    ;
 
 %%
