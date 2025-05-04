@@ -9,7 +9,8 @@
 
 %union {
 	/** Terminals. */
-
+	
+	char * string;
 	int integer;
 	Token token;
 
@@ -19,6 +20,9 @@
 	Expression * expression;
 	Factor * factor;
 	Program * program;
+	Statement * statement;
+	FieldList * fieldList;
+	Condition * condition;
 }
 
 /**
@@ -32,37 +36,121 @@
 %destructor { releaseConstant($$); } <constant>
 %destructor { releaseExpression($$); } <expression>
 %destructor { releaseFactor($$); } <factor>
+%destructor { free($$); } <string>
+%destructor { releaseStatement($$); } <statement>
+%destructor { releaseFieldList($$); } <fieldList>
+%destructor { releaseCondition($$); } <condition>
 
 /** Terminals. */
 %token <integer> INTEGER
-%token <token> ADD
-%token <token> CLOSE_PARENTHESIS
-%token <token> DIV
-%token <token> MUL
-%token <token> OPEN_PARENTHESIS
-%token <token> SUB
+%token <string> IDENTIFIER STRING
 
+/** Protocol tokens */
+%token <token> PROTOCOL PROTO_HTTP PROTO_TCP PROTO_UDP PROTO_DNS
+
+/** Data operation tokens */
+%token <token> EXTRACT CAPTURE FILTER GROUP COUNT WHERE HAVING ORDER BY FROM AS
+
+/** Alert tokens */
+%token <token> ALERT WHEN SEND TO
+
+/** Comparison tokens */
+%token <token> SAME DIFFERENT
+
+/** Definition tokens */
+%token <token> DEFINE IMPORT EXPORT TABLE TIMESPAN
+
+/** Control flow tokens */
+%token <token> IF ELSE WHILE
+
+/** Data type tokens */
+%token <token> PACKET_TYPE ADDRESS_TYPE
+
+/** Operator tokens */
+%token <token> ADD SUB MUL DIV
+%token <token> ASSIGN EQUALS NOT_EQUALS LESS_THAN GREATER_THAN
+%token <token> AND OR
+
+/** Delimiter tokens */
+%token <token> OPEN_PARENTHESIS CLOSE_PARENTHESIS
+%token <token> OPEN_BRACE CLOSE_BRACE
+%token <token> SEMICOLON COMMA
+
+/** Error token */
 %token <token> UNKNOWN
 
 /** Non-terminals. */
-%type <constant> constant
+%type <program> program
+%type <statement> statement capture_statement extract_statement filter_statement
+%type <fieldList> field_list field
+%type <condition> condition comparison_expression logical_expression
 %type <expression> expression
 %type <factor> factor
-%type <program> program
+%type <constant> constant
 
 /**
  * Precedence and associativity.
  *
  * @see https://www.gnu.org/software/bison/manual/html_node/Precedence.html
  */
+%left COMMA
+%right ASSIGN
+%left OR
+%left AND
+%left EQUALS NOT_EQUALS
+%left LESS_THAN GREATER_THAN
 %left ADD SUB
 %left MUL DIV
+%left OPEN_PARENTHESIS
 
 %%
 
 // IMPORTANT: To use λ in the following grammar, use the %empty symbol.
 
-program: expression													{ $$ = ExpressionProgramSemanticAction(currentCompilerState(), $1); }
+program: statement                                    { $$ = StatementProgramSemanticAction(currentCompilerState(), $1); }
+	| program statement                              { $$ = MultiStatementProgramSemanticAction(currentCompilerState(), $1, $2); }
+	;
+
+statement: capture_statement                         { $$ = $1; }
+	| extract_statement                             { $$ = $1; }
+	| filter_statement                              { $$ = $1; }
+	;
+
+capture_statement: CAPTURE FROM STRING WHERE condition SEMICOLON 
+													{ $$ = CaptureStatementSemanticAction($3, $5); }
+	;
+
+extract_statement: EXTRACT OPEN_BRACE field_list CLOSE_BRACE 
+													FROM STRING 
+													WHERE condition SEMICOLON          { $$ = ExtractStatementSemanticAction($3, $6, $8); }
+	;
+
+filter_statement: FILTER condition SEMICOLON        { $$ = FilterStatementSemanticAction($2); }
+	;
+
+field_list: field                                  { $$ = $1; }
+	| field_list COMMA field                       { $$ = FieldListSemanticAction($1, $3); }
+	;
+
+field: IDENTIFIER                                  { $$ = FieldSemanticAction($1, NULL); }
+	| IDENTIFIER AS IDENTIFIER                     { $$ = FieldSemanticAction($1, $3); }
+	;
+
+condition: comparison_expression                    { $$ = $1; }
+	| logical_expression                           { $$ = $1; }
+	| OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = $2; }
+	;
+
+logical_expression:
+	condition AND condition                        { $$ = LogicalConditionSemanticAction($1, $3, AND_OP); }
+	| condition OR condition                       { $$ = LogicalConditionSemanticAction($1, $3, OR_OP); }
+	;
+
+comparison_expression: 
+	expression EQUALS expression                   { $$ = ComparisonSemanticAction($1, $3, EQUALS); }
+	| expression NOT_EQUALS expression             { $$ = ComparisonSemanticAction($1, $3, NOT_EQUALS); }
+	| expression LESS_THAN expression              { $$ = ComparisonSemanticAction($1, $3, LESS_THAN); }
+	| expression GREATER_THAN expression           { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN); }
 	;
 
 expression: expression[left] ADD expression[right]					{ $$ = ArithmeticExpressionSemanticAction($left, $right, ADDITION); }
