@@ -107,7 +107,7 @@ ComputationResult computeExpression(Expression * expression) {
 		case ADDITION:
 		case DIVISION:
 		case MULTIPLICATION:
-		case SUBTRACTION:
+		case SUBTRACTION: {
 			ComputationResult leftResult = computeExpression(expression->leftExpression);
 			ComputationResult rightResult = computeExpression(expression->rightExpression);
 			if (leftResult.succeed && rightResult.succeed) {
@@ -117,6 +117,7 @@ ComputationResult computeExpression(Expression * expression) {
 			else {
 				return _invalidComputation();
 			}
+		}
 		case FACTOR:
 			return computeFactor(expression->factor);
 		default:
