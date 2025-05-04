@@ -21,14 +21,33 @@ void shutdownFlexActionsModule();
  * Flex lexeme processing actions.
  */
 
+/* Comment Actions */
 void BeginMultilineCommentLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
 void EndMultilineCommentLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
 void IgnoredLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
 
-Token ArithmeticOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
-Token IntegerLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
-Token ParenthesisLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+/* Keyword Actions */
+Token KeywordLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token ProtocolLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token TypeLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
 
+/* Operator Actions */
+Token ArithmeticOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token RelationalOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token AssignmentOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+
+/* Delimiter Actions */
+Token ParenthesisLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token BraceLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token SemicolonLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token CommaLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+
+/* Literal Actions */
+Token IntegerLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
+Token IdentifierLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
+Token StringLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
+
+/* Error Handling */
 Token UnknownLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);
 
 #endif

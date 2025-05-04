@@ -1,9 +1,18 @@
 #include "FlexActions.h"
+#include <string.h>
+#include <stdlib.h>
 
 /* MODULE INTERNAL STATE */
 
 static Logger * _logger = NULL;
 static boolean _logIgnoredLexemes = true;
+
+// State flags for context tracking
+static boolean isCapture = false;
+static boolean isExtract = false;
+static boolean isFilter = false;
+static boolean isAlert = false;
+static boolean isDefine = false;
 
 void initializeFlexActionsModule() {
 	_logIgnoredLexemes = getBooleanOrDefault("LOG_IGNORED_LEXEMES", _logIgnoredLexemes);
@@ -57,7 +66,70 @@ void IgnoredLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
 }
 
+Token KeywordLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token ProtocolLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token TypeLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
 Token ArithmeticOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token RelationalOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token AssignmentOperatorLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token ParenthesisLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token BraceLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token SemicolonLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	lexicalAnalyzerContext->semanticValue->token = token;
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return token;
+}
+
+Token CommaLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
 	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
 	lexicalAnalyzerContext->semanticValue->token = token;
 	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
@@ -71,11 +143,31 @@ Token IntegerLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	return INTEGER;
 }
 
-Token ParenthesisLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token) {
+Token IdentifierLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
-	lexicalAnalyzerContext->semanticValue->token = token;
+	if (lexicalAnalyzerContext->semanticValue->string != NULL) {
+		free(lexicalAnalyzerContext->semanticValue->string);
+	}
+	lexicalAnalyzerContext->semanticValue->string = strdup(lexicalAnalyzerContext->lexeme);
+	
 	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
-	return token;
+	return IDENTIFIER;
+}
+
+Token StringLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
+	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+	size_t len = lexicalAnalyzerContext->length;
+	char * str = malloc(len - 1); 
+	strncpy(str, lexicalAnalyzerContext->lexeme + 1, len - 2);
+	str[len - 2] = '\0'; 
+	
+	if (lexicalAnalyzerContext->semanticValue->string != NULL) {
+		free(lexicalAnalyzerContext->semanticValue->string);
+	}
+	lexicalAnalyzerContext->semanticValue->string = str;
+	
+	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+	return STRING;
 }
 
 Token UnknownLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
