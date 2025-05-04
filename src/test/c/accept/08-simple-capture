@@ -1,0 +1,2 @@
+// Capture HTTP traffic on port 443
+capture from "eth0" where dst_port == 443; 

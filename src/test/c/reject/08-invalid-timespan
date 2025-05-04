@@ -1,0 +1,2 @@
+// Invalid timespan format
+alert when count(*) > 100 timespan = 5minutes; 

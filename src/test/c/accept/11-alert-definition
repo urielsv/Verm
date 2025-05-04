@@ -1,0 +1,6 @@
+// Define alert for multiple errors
+alert when {
+    count(http.response_code >= 500) > 10
+    timespan = 5m
+}
+send to "admin@example.com"; 

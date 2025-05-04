@@ -1,0 +1,6 @@
+// Unmatched braces
+extract {
+    ip.src_addr,
+    http.method
+from "capture.pcap";
+} 

@@ -1,0 +1,7 @@
+// Invalid group by clause
+extract {
+    ip.src_addr,
+    count(*)
+}
+from "capture.pcap"
+group having count(*) > 10; 

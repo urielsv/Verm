@@ -1,0 +1,9 @@
+// Group and count errors by source
+extract {
+    ip.src_addr,
+    http.response_code
+}
+from "capture.pcap"
+where http.response_code >= 500
+group by ip.src_addr
+having count(*) > 10; 

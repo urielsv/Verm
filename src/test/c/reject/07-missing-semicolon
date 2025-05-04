@@ -1,0 +1,2 @@
+// Missing semicolon
+capture from "eth0" where dst_port == 443 

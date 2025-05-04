@@ -1,0 +1,5 @@
+// Invalid protocol name
+PROTOCOL INVALID {
+    field1: string,
+    field2: integer,
+} 

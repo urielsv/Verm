@@ -1,0 +1,2 @@
+// Invalid alert syntax
+alert send "admin@example.com" when count(*) > 10; 

@@ -1,0 +1,5 @@
+// Complex filtering with multiple conditions
+filter {
+    (protocol == "HTTP" and response_code >= 400) or
+    (protocol == "TCP" and flags.syn == 1 and flags.ack == 0)
+}; 
