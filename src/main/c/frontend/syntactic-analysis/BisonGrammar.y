@@ -194,7 +194,7 @@ condition:
     | OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = ParenthesizedConditionSemanticAction($2); }
     | IDENTIFIER { $$ = IdentifierConditionSemanticAction($1); }
     | IDENTIFIER DOT IDENTIFIER { $$ = FieldConditionSemanticAction($1, $3); }
-    | COUNT OPEN_PARENTHESIS condition CLOSE_PARENTHESIS {
+    | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS {
         $$ = CountConditionSemanticAction($3, EQUALS_OP, 0); 
     }
     | SAME IDENTIFIER { $$ = SameConditionSemanticAction($2); }
@@ -252,8 +252,12 @@ factor:
     OPEN_PARENTHESIS expression CLOSE_PARENTHESIS { $$ = ExpressionFactorSemanticAction($2); }
     | constant { $$ = ConstantFactorSemanticAction($1); }
     | IDENTIFIER DOT IDENTIFIER { 
-        Field* f = FieldSemanticAction($1, $3);
-        $$ = FieldFactorSemanticAction(f);
+        Field* f = FieldSemanticAction($1, $3); 
+        $$ = FieldFactorSemanticAction(f); 
+    }
+    | IDENTIFIER { 
+        Field* f = FieldSemanticAction($1, NULL); 
+        $$ = FieldFactorSemanticAction(f); 
     }
     | ADDRESS_TYPE STRING { $$ = AddressTypeFactorSemanticAction($2); }
     | PACKET_TYPE STRING { $$ = PacketTypeFactorSemanticAction($2); }

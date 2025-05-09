@@ -106,10 +106,7 @@ typedef struct {
 } Value;
 
 struct Constant {
-    union {
         Value value;   
-        int intValue;  
-    };
 };
 
 struct Factor {

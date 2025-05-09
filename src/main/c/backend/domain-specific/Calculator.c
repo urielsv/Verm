@@ -97,7 +97,7 @@ ComputationResult subtract(const int minuend, const int subtract) {
 ComputationResult computeConstant(Constant * constant) {
 	ComputationResult computationResult = {
 		.succeed = true,
-		.value = constant->intValue
+		.value = constant->value.integer
 	};
 	return computationResult;
 }

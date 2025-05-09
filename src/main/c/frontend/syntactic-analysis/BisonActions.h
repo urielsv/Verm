@@ -70,12 +70,20 @@ Statement * DefineStatementSemanticAction(char * pattern_name, PatternCondition 
 Statement * ImportStatementSemanticAction(char * filename);
 Statement * ExportStatementSemanticAction(char * data, char * filename);
 
+Condition * SamePatternConditionSemanticAction(char * field);
+Condition * DifferentPatternConditionSemanticAction(char * field);
+Condition * CountPatternConditionSemanticAction(char * field, ComparisonOperator op, int value);
+Condition * MultiplePatternConditionsSemanticAction(Condition * conditions, Condition * newCondition);
+Condition * TimespanPatternConditionSemanticAction(ComparisonOperator op, int seconds);
+Condition * ComparisonSemanticAction(Expression * left, Expression * right, ComparisonOperator op);
+
+
 /* Wrappers */
 Statement * CaptureStatementSemanticActionWrapper(Statement * stmt);
 Statement * ExtractStatementSemanticActionWrapper(Statement * stmt);
 Statement * FilterStatementSemanticActionWrapper(Statement * stmt);
 Statement * AlertStatementSemanticActionWrapper(Statement * stmt);
-Statement * GroupStatementSemanticActionWrapcper(Statement * stmt);
+Statement * GroupStatementSemanticActionWrapper(Statement * stmt);
 Statement * DefineStatementSemanticActionWrapper(Statement * stmt);
 Statement * ImportExportStatementSemanticActionWrapper(Statement * stmt);
 

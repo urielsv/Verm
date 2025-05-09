@@ -175,7 +175,7 @@ void releaseField(Field* field) {
 Constant* IntegerConstantSemanticAction(const int value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Constant* constant = malloc(sizeof(Constant));
-    constant->intValue = value;
+    constant->value.integer= value;
     return constant;
 }
 
