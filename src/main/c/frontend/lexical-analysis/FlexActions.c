@@ -154,7 +154,6 @@ Token IdentifierLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
 
 	char* val = strdup(lexicalAnalyzerContext->lexeme);
-    printf("[TRACK] strdup IDENTIFIER: %s (%p)\n", val, val);
     lexicalAnalyzerContext->semanticValue->string = val;
     destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
     return IDENTIFIER;

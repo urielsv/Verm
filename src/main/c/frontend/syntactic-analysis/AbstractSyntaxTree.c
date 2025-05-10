@@ -78,7 +78,6 @@ void releaseStatement(Statement * statement) {
             break;
 
         case EXTRACT_STATEMENT:
-            printf("[DEBUG] Freeing EXTRACT_STATEMENT\n");
             if (statement->extract.source != NULL) {
                 free(statement->extract.source);
             }
@@ -131,7 +130,6 @@ void releaseStatement(Statement * statement) {
             }
             break;
     }
-    printf("[DEBUG] Freeing statement = %p\n", (void*)statement);
     free(statement);
 }
 
@@ -159,24 +157,20 @@ void releaseCondition(Condition * condition) {
 
         default:
             if (condition->type >= PC_SAME && condition->type <= PC_TIMESPAN) {
-                printf("[DEBUG] PATTERN: type = %d\n", condition->pattern.type);
                 switch (condition->pattern.type) {
                     case PC_SAME:
                     case PC_DIFFERENT:
-                        printf("[DEBUG] PATTERN SAME/DIFFERENT: field = %p\n",
                                (void*)condition->pattern.same.field);
                         if (condition->pattern.same.field) {
                             free(condition->pattern.same.field);
                         }
                         break;
                     case PC_COUNT:
-                        printf("[DEBUG] PATTERN COUNT: field = %p\n", (void*)condition->pattern.count.field);
                             if (condition->pattern.count.field) {
                                 free(condition->pattern.count.field);
                             }
                         break;
                     case PC_TIMESPAN:
-                        printf("[DEBUG] PATTERN TIMESPAN: no fields to free\n");
                         break;
                 }
             } else {
@@ -185,12 +179,10 @@ void releaseCondition(Condition * condition) {
             break;
     }
 
-    printf("[DEBUG] Freeing condition = %p\n", (void*)condition);
     free(condition);
 }
 
 void releaseField(Field * field) {
-    printf("[DEBUGPRINT]releaseField: %p\n", field);
     if (field == NULL) return;
 
     if (field->protocol != NULL) {
@@ -206,7 +198,6 @@ void releaseField(Field * field) {
 
 
 void releaseFieldList(FieldList * fieldList) {
-    printf("[DEBUGPRINT]releaseFieldList: %p", fieldList);
     while (fieldList != NULL) {
         FieldList * next = fieldList->next;
         if (fieldList->field != NULL) {
