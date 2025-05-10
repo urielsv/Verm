@@ -136,6 +136,13 @@ Token CommaLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token t
 	return token;
 }
 
+Token DotLexemeAction(LexicalAnalyzerContext * ctx, Token token) {
+    _logLexicalAnalyzerContext(__FUNCTION__, ctx);
+    destroyLexicalAnalyzerContext(ctx);
+    return token;
+}
+
+
 Token IntegerLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
 	lexicalAnalyzerContext->semanticValue->integer = atoi(lexicalAnalyzerContext->lexeme);
@@ -145,30 +152,38 @@ Token IntegerLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 
 Token IdentifierLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
-	if (lexicalAnalyzerContext->semanticValue->string != NULL) {
-		free(lexicalAnalyzerContext->semanticValue->string);
-	}
-	lexicalAnalyzerContext->semanticValue->string = strdup(lexicalAnalyzerContext->lexeme);
-	
-	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
-	return IDENTIFIER;
+
+	char* val = strdup(lexicalAnalyzerContext->lexeme);
+    printf("[TRACK] strdup IDENTIFIER: %s (%p)\n", val, val);
+    lexicalAnalyzerContext->semanticValue->string = val;
+    destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+    return IDENTIFIER;
 }
 
 Token StringLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
-	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
-	size_t len = lexicalAnalyzerContext->length;
-	char * str = malloc(len - 1); 
-	strncpy(str, lexicalAnalyzerContext->lexeme + 1, len - 2);
-	str[len - 2] = '\0'; 
-	
-	if (lexicalAnalyzerContext->semanticValue->string != NULL) {
-		free(lexicalAnalyzerContext->semanticValue->string);
-	}
-	lexicalAnalyzerContext->semanticValue->string = str;
-	
-	destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
-	return STRING;
+    _logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);
+
+    size_t len = lexicalAnalyzerContext->length;
+
+    if (len < 2) {
+        lexicalAnalyzerContext->semanticValue->string = strdup("");
+    } else {
+        size_t content_len = len - 2;
+        char * str = malloc(content_len + 1); // +1 para '\0'
+        strncpy(str, lexicalAnalyzerContext->lexeme + 1, content_len);
+        str[content_len] = '\0';
+
+        //if (lexicalAnalyzerContext->semanticValue->string != NULL) {
+        //    free(lexicalAnalyzerContext->semanticValue->string);
+        //}
+
+        lexicalAnalyzerContext->semanticValue->string = str;
+    }
+
+    destroyLexicalAnalyzerContext(lexicalAnalyzerContext);
+    return STRING;
 }
+
 
 Token UnknownLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext) {
 	_logLexicalAnalyzerContext(__FUNCTION__, lexicalAnalyzerContext);

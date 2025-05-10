@@ -30,32 +30,47 @@ void releaseExpression(Expression * expression) {
             case FACTOR:
                 releaseFactor(expression->factor);
                 break;
+            case EXPRESSION_COUNT:
+            releaseCondition(expression->count);
+                break;
         }
         free(expression);
     }
 }
 
-void releaseProgram(Program * program) {
-    logDebugging(_logger, "Executing destructor: %s", __FUNCTION__);
-    if (program != NULL) {
-        if (program->statements != NULL) {
-            StatementList* current = program->statements;
-            while (current != NULL) {
-                StatementList* next = current->next;
-                releaseStatement(current->statement);
-                free(current);
-                current = next;
+void releaseProgram(Program* program) {
+    if (program == NULL) return;
+
+    switch (program->type) {
+        case PROGRAM_STATEMENTS:
+            if (program->statements) {
+                StatementList* current = program->statements;
+                while (current) {
+                    releaseStatement(current->statement);
+                    StatementList* temp = current;
+                    current = current->next;
+                    free(temp);
+                }
             }
-        }
-        free(program);
+            break;
+
+        case PROGRAM_EXPRESSION:
+            if (program->expression) {
+                releaseExpression(program->expression);
+            }
+            break;
     }
+
+    free(program);
 }
+
 
 void releaseStatement(Statement * statement) {
     if (statement == NULL) return;
 
     switch (statement->type) {
         case CAPTURE_STATEMENT:
+            if (statement->capture.interface != NULL)
             free(statement->capture.interface);
             if (statement->capture.filter != NULL) {
                 releaseCondition(statement->capture.filter);
@@ -63,14 +78,29 @@ void releaseStatement(Statement * statement) {
             break;
 
         case EXTRACT_STATEMENT:
-            free(statement->extract.source);
+            printf("[DEBUG] Freeing EXTRACT_STATEMENT\n");
+            if (statement->extract.source != NULL) {
+                free(statement->extract.source);
+            }
+            if (statement->extract.fields != NULL) {
+                releaseFieldList(statement->extract.fields);
+            }            
             if (statement->extract.filter != NULL) {
                 releaseCondition(statement->extract.filter);
             }
-            releaseFieldList(statement->extract.fields);
+        
+            if (statement->group.group_fields != NULL) {
+                releaseFieldList(statement->group.group_fields);
+            }
+        
+            if (statement->group.having != NULL) {
+                releaseCondition(statement->group.having);
+            }
+        
             break;
-
+        
         case FILTER_STATEMENT:
+            
             if (statement->filter.condition != NULL) {
                 releaseCondition(statement->filter.condition);
             }
@@ -83,19 +113,12 @@ void releaseStatement(Statement * statement) {
             free(statement->alert.message);
             break;
 
-        case GROUP_STATEMENT:
-            releaseFieldList(statement->group.group_fields);
-            if (statement->group.having != NULL) {
-                releaseCondition(statement->group.having);
-            }
-            break;
-
         case DEFINE_STATEMENT:
             free(statement->define.pattern_name);
             for (int i = 0; i < statement->define.condition_count; i++) {
                 PatternCondition* pc = &statement->define.conditions[i];
                 if (pc->type == PC_SAME || pc->type == PC_DIFFERENT || pc->type == PC_COUNT) {
-                    free(pc->same.field); // Todos comparten el mismo campo en la union
+                    free(pc->same.field); 
                 }
             }
             free(statement->define.conditions);
@@ -108,12 +131,15 @@ void releaseStatement(Statement * statement) {
             }
             break;
     }
+    printf("[DEBUG] Freeing statement = %p\n", (void*)statement);
     free(statement);
 }
 
-
 void releaseCondition(Condition * condition) {
-    if (condition == NULL) return;
+    if (condition == NULL) {
+        return;
+    }
+
 
     switch (condition->type) {
         case COMPARISON:
@@ -133,19 +159,24 @@ void releaseCondition(Condition * condition) {
 
         default:
             if (condition->type >= PC_SAME && condition->type <= PC_TIMESPAN) {
+                printf("[DEBUG] PATTERN: type = %d\n", condition->pattern.type);
                 switch (condition->pattern.type) {
                     case PC_SAME:
                     case PC_DIFFERENT:
+                        printf("[DEBUG] PATTERN SAME/DIFFERENT: field = %p\n",
+                               (void*)condition->pattern.same.field);
                         if (condition->pattern.same.field) {
                             free(condition->pattern.same.field);
                         }
                         break;
                     case PC_COUNT:
-                        if (condition->pattern.count.field) {
-                            free(condition->pattern.count.field);
-                        }
+                        printf("[DEBUG] PATTERN COUNT: field = %p\n", (void*)condition->pattern.count.field);
+                            if (condition->pattern.count.field) {
+                                free(condition->pattern.count.field);
+                            }
                         break;
                     case PC_TIMESPAN:
+                        printf("[DEBUG] PATTERN TIMESPAN: no fields to free\n");
                         break;
                 }
             } else {
@@ -153,20 +184,33 @@ void releaseCondition(Condition * condition) {
             }
             break;
     }
+
+    printf("[DEBUG] Freeing condition = %p\n", (void*)condition);
     free(condition);
 }
+
+void releaseField(Field * field) {
+    printf("[DEBUGPRINT]releaseField: %p\n", field);
+    if (field == NULL) return;
+
+    if (field->protocol != NULL) {
+        free(field->protocol);
+    }
+
+    if (field->name != NULL) {
+        free(field->name);
+    }
+
+    free(field);
+}
+
+
 void releaseFieldList(FieldList * fieldList) {
+    printf("[DEBUGPRINT]releaseFieldList: %p", fieldList);
     while (fieldList != NULL) {
         FieldList * next = fieldList->next;
         if (fieldList->field != NULL) {
-            if (fieldList->field->protocol != NULL) {
-                free(fieldList->field->protocol);
-            }
-            free(fieldList->field->name);
-            if (fieldList->field->alias != NULL) {
-                free(fieldList->field->alias);
-            }
-            free(fieldList->field);
+            releaseField(fieldList->field);
         }
         free(fieldList);
         fieldList = next;
@@ -185,14 +229,7 @@ void releaseFactor(Factor * factor) {
                 break;
             case FIELD:
                 if (factor->field != NULL) {
-                    if (factor->field->protocol != NULL) {
-                        free(factor->field->protocol);
-                    }
-                    free(factor->field->name);
-                    if (factor->field->alias != NULL) {
-                        free(factor->field->alias);
-                    }
-                    free(factor->field);
+                    releaseField(factor->field);
                 }
                 break;
         }

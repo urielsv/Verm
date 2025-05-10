@@ -144,6 +144,7 @@ Condition* ComparisonSemanticAction(Expression* left, Expression* right, Compari
     return cond;
 }
 
+
 /* ==================== FUNCIONES DE FACTORES ==================== */
 
 Factor* AddressTypeFactorSemanticAction(char* address) {
@@ -159,17 +160,6 @@ Factor* PacketTypeFactorSemanticAction(char* data) {
 }
 
 
-/* ==================== DESTRUCTORES ==================== */
-
-void releaseField(Field* field) {
-    if (!field) return;
-    
-    if (field->name) free(field->name);
-    if (field->alias) free(field->alias);
-    if (field->protocol) free(field->protocol);
-    
-    free(field);
-}
 
 
 Constant* IntegerConstantSemanticAction(const int value) {
@@ -267,21 +257,10 @@ Factor* FieldFactorSemanticAction(Field* field) {
 
 /* ==================== PROGRAMAS ==================== */
 
-Program* ExpressionProgramSemanticAction(CompilerState* compilerState, Expression* expression) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Program* program = calloc(1, sizeof(Program));
-    program->expression = expression;
-    compilerState->abstractSyntaxtTree = program;
-    compilerState->succeed = (flexCurrentContext() == 0);
-    if (!compilerState->succeed) {
-        logError(_logger, "Context error: %d", flexCurrentContext());
-    }
-    return program;
-}
-
 Program* StatementProgramSemanticAction(CompilerState* state, Statement* statement) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Program* program = calloc(1, sizeof(Program));
+    program->type = PROGRAM_STATEMENTS;
     StatementList* list = calloc(1, sizeof(StatementList));
     list->statement = statement;
     list->next = NULL;
@@ -290,6 +269,17 @@ Program* StatementProgramSemanticAction(CompilerState* state, Statement* stateme
     state->succeed = true;
     return program;
 }
+
+Program* ExpressionProgramSemanticAction(CompilerState* state, Expression* expression) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Program* program = calloc(1, sizeof(Program));
+    program->type = PROGRAM_EXPRESSION;
+    program->expression = expression;
+    state->abstractSyntaxtTree = program;
+    state->succeed = (flexCurrentContext() == 0);
+    return program;
+}
+
 
 Program* MultiStatementProgramSemanticAction(CompilerState* state, Program* program, Statement* statement) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -307,31 +297,14 @@ Program* MultiStatementProgramSemanticAction(CompilerState* state, Program* prog
 Field* FieldSemanticAction(char* name, char* protocol) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Field* field = calloc(1, sizeof(Field));
-    field->name = strdup(name);
-    field->protocol = protocol ? strdup(protocol) : NULL;
-    field->alias = NULL;
+    field->name = name;
+    field->protocol = protocol;
     return field;
 }
 
-Field* FieldSemanticActionWithAlias(char* name, char* alias) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Field* field = calloc(1, sizeof(Field));
-    field->name = strdup(name);
-    field->alias = strdup(alias);
-    field->protocol = NULL;
-    return field;
-}
-
-Field* FieldSemanticActionWithFullAlias(char* name, char* protocol, char* alias) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Field* field = calloc(1, sizeof(Field));
-    field->name = strdup(name);
-    field->protocol = protocol ? strdup(protocol) : NULL;
-    field->alias = alias ? strdup(alias) : NULL;
-    return field;
-}
 
 FieldList* createFieldList(Field* field) {
+    printf("[DEBUGPRINT]createFieldList: %p\n", field);
     _logSyntacticAnalyzerAction(__FUNCTION__);
     FieldList* list = calloc(1, sizeof(FieldList));
     list->field = field;
@@ -340,6 +313,7 @@ FieldList* createFieldList(Field* field) {
 }
 
 FieldList* appendToFieldList(FieldList* list, Field* newField) {
+    printf("[DEBUGPRINT]appendToFieldList: list = %p, field = %p\n", list, newField);
     _logSyntacticAnalyzerAction(__FUNCTION__);
     FieldList* new_node = calloc(1, sizeof(FieldList));
     new_node->field = newField;
@@ -432,20 +406,40 @@ Statement* CaptureStatementSemanticAction(char* source, Condition* condition) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Statement* stmt = calloc(1, sizeof(Statement));
     stmt->type = CAPTURE_STATEMENT;
-    stmt->capture.interface = strdup(source);
+    stmt->capture.interface = source;
     stmt->capture.filter = condition;
     return stmt;
 }
 
-Statement* ExtractStatementSemanticAction(FieldList* fields, char* source, Condition* condition) {
+Statement* ExtractStatementSemanticAction(FieldList* fields, char* source, Condition* filter, FieldList* group_fields, Condition* having) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Statement* stmt = calloc(1, sizeof(Statement));
     stmt->type = EXTRACT_STATEMENT;
     stmt->extract.fields = fields;
-    stmt->extract.source = strdup(source);
-    stmt->extract.filter = condition;
+    stmt->extract.source = source;
+    stmt->extract.filter = filter;
+    stmt->group.group_fields = group_fields;
+    stmt->group.having = having;              
     return stmt;
 }
+
+Expression* CountExpressionSemanticAction(Condition* inner) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Expression* expr = calloc(1, sizeof(Expression));
+    expr->type = EXPRESSION_COUNT;
+    expr->count = inner;
+    return expr;
+}
+
+Condition* ExpressionConditionSemanticAction(Expression* expression) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Condition* cond = calloc(1, sizeof(Condition));
+    cond->type = COMPARISON;
+    cond->comparison.left = expression;
+    cond->comparison.right = NULL; // Podés usar esto para distinguir que es una expr directa
+    return cond;
+}
+
 
 Statement* FilterStatementSemanticAction(Condition* condition) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -460,18 +454,11 @@ Statement* AlertStatementSemanticAction(Condition* trigger, char* message) {
     Statement* stmt = calloc(1, sizeof(Statement));
     stmt->type = ALERT_STATEMENT;
     stmt->alert.trigger = trigger;
-    stmt->alert.message = strdup(message);
+    stmt->alert.message = message;
     return stmt;
 }
 
-Statement* GroupStatementSemanticAction(FieldList* group_fields, Condition* having) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Statement* stmt = calloc(1, sizeof(Statement));
-    stmt->type = GROUP_STATEMENT;
-    stmt->group.group_fields = group_fields;
-    stmt->group.having = having;
-    return stmt;
-}
+
 
 Statement* DefineStatementSemanticAction(char* pattern_name, PatternCondition* conditions, int count) {
     _logSyntacticAnalyzerAction(__FUNCTION__);

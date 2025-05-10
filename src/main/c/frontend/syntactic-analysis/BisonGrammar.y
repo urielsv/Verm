@@ -21,6 +21,7 @@
     Field* field;
     FieldList* fieldList;
     Condition* condition;
+    GroupStatement groupStatement;
 }
 
 /** Destructors */
@@ -36,6 +37,7 @@
 /** Tokens */
 %token <integer> INTEGER
 %token <string> IDENTIFIER STRING
+
 
 /** Protocol tokens */
 %token <token> PROTOCOL PROTO_HTTP PROTO_TCP PROTO_UDP PROTO_DNS
@@ -62,6 +64,8 @@
 %token <token> ADD SUB MUL DIV
 %token <token> ASSIGN EQUALS NOT_EQUALS LESS_THAN GREATER_THAN
 %token <token> AND OR
+%token <token> GREATER_THAN_OR_EQUALS LESS_THAN_OR_EQUALS
+
 
 /** Delimiter tokens */
 %token <token> OPEN_PARENTHESIS CLOSE_PARENTHESIS
@@ -74,7 +78,7 @@
 /** Non-terminals */
 %type <program> program
 %type <statement> statement capture_statement extract_statement filter_statement
-%type <statement> alert_statement group_statement define_statement import_export_statement
+%type <statement> alert_statement define_statement import_export_statement
 %type <condition> condition having_clause pattern_conditions pattern_condition
 %type <condition> comparison_expression logical_expression
 %type <expression> expression
@@ -82,6 +86,10 @@
 %type <constant> constant
 %type <fieldList> field_list
 %type <field> field
+%type <condition> where_clause
+%type <groupStatement> group_clause
+
+
 
 /** Precedence and associativity */
 %left COMMA
@@ -96,12 +104,12 @@
 
 %%
 
-program: 
-    statement { 
-        $$ = StatementProgramSemanticAction(currentCompilerState(), $1); 
+program:
+    statement {
+        $$ = StatementProgramSemanticAction(currentCompilerState(), $1);
     }
-    | program statement { 
-        $$ = MultiStatementProgramSemanticAction(currentCompilerState(), $1, $2); 
+    | program statement {
+        $$ = MultiStatementProgramSemanticAction(currentCompilerState(), $1, $2);
     }
     ;
 
@@ -110,27 +118,17 @@ statement:
     | extract_statement { $$ = ExtractStatementSemanticActionWrapper($1); }
     | filter_statement { $$ = FilterStatementSemanticActionWrapper($1); }
     | alert_statement { $$ = AlertStatementSemanticActionWrapper($1); }
-    | group_statement { $$ = GroupStatementSemanticActionWrapper($1); }
     | define_statement { $$ = DefineStatementSemanticActionWrapper($1); }
     | import_export_statement { $$ = ImportExportStatementSemanticActionWrapper($1); }
     ;
 
 alert_statement:
-    ALERT WHEN condition SEND STRING SEMICOLON {
-        $$ = AlertStatementSemanticAction($3, $5); 
-    }
-    ;
+ALERT WHEN condition SEND TO STRING SEMICOLON {
+    $$ = AlertStatementSemanticAction($3, $6);
+}
+;
 
-group_statement:
-    GROUP BY field_list having_clause SEMICOLON {
-        $$ = GroupStatementSemanticAction($3, $4); 
-    }
-    ;
 
-having_clause:
-    %empty { $$ = EmptyHavingClauseSemanticAction(); }
-    | HAVING condition { $$ = HavingClauseSemanticAction($2); }
-    ;
 
 define_statement:
     DEFINE IDENTIFIER OPEN_BRACE pattern_conditions CLOSE_BRACE SEMICOLON {
@@ -142,6 +140,7 @@ define_statement:
 
 pattern_condition:
     SAME IDENTIFIER { $$ = SamePatternConditionSemanticAction($2); }
+    | comparison_expression { $$ = $1; }  
     | DIFFERENT IDENTIFIER { $$ = DifferentPatternConditionSemanticAction($2); }
     | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS EQUALS INTEGER {
         $$ = CountPatternConditionSemanticAction($3, EQUALS_OP, $6); 
@@ -182,20 +181,26 @@ import_export_statement:
 field:
     IDENTIFIER { $$ = FieldSemanticAction($1, NULL); }
     | IDENTIFIER DOT IDENTIFIER { $$ = FieldSemanticAction($1, $3); }
-    | IDENTIFIER AS IDENTIFIER { $$ = FieldSemanticActionWithAlias($1, $3); }
-    | IDENTIFIER DOT IDENTIFIER AS IDENTIFIER { 
-        $$ = FieldSemanticActionWithFullAlias($1, $3, $5); 
-    }
     ;
 
 condition:
     comparison_expression { $$ = $1; }
     | logical_expression { $$ = $1; }
+    | expression { $$ = ExpressionConditionSemanticAction($1); }
     | OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = ParenthesizedConditionSemanticAction($2); }
     | IDENTIFIER { $$ = IdentifierConditionSemanticAction($1); }
     | IDENTIFIER DOT IDENTIFIER { $$ = FieldConditionSemanticAction($1, $3); }
-    | COUNT OPEN_PARENTHESIS IDENTIFIER CLOSE_PARENTHESIS {
-        $$ = CountConditionSemanticAction($3, EQUALS_OP, 0); 
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS GREATER_THAN INTEGER {
+        $$ = CountConditionSemanticAction("*", GREATER_THAN_OP, $6);
+    }
+        | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS EQUALS INTEGER {
+        $$ = CountConditionSemanticAction("*", EQUALS_OP, $6);
+    }
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS NOT_EQUALS INTEGER {
+        $$ = CountConditionSemanticAction("*", NOT_EQUALS_OP, $6);
+    }
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS LESS_THAN INTEGER {
+        $$ = CountConditionSemanticAction("*", LESS_THAN_OP, $6);
     }
     | SAME IDENTIFIER { $$ = SameConditionSemanticAction($2); }
     | DIFFERENT IDENTIFIER { $$ = DifferentConditionSemanticAction($2); }
@@ -211,15 +216,47 @@ capture_statement:
     }
     ;
 
-extract_statement: 
-    EXTRACT OPEN_BRACE field_list CLOSE_BRACE FROM STRING WHERE condition SEMICOLON {
-        $$ = ExtractStatementSemanticAction($3, $6, $8); 
+group_clause:
+    GROUP BY field_list having_clause {
+        GroupStatement gs;
+        gs.group_fields = $3;
+        gs.having = $4;
+        $$ = gs;
+    }
+    | %empty {
+        GroupStatement gs;
+        gs.group_fields = NULL;
+        gs.having = NULL;
+        $$ = gs;
     }
     ;
+
+
+having_clause: 
+     %empty { $$ = NULL; }
+    | HAVING condition { $$ = $2; }
+   
+    ;
+
+where_clause: 
+    %empty           { $$ = NULL; }
+    | WHERE condition { $$ = $2; }
+
+
+extract_statement:
+    EXTRACT OPEN_BRACE field_list CLOSE_BRACE FROM STRING where_clause group_clause SEMICOLON {
+        $$ = ExtractStatementSemanticAction($3, $6, $7, $8.group_fields, $8.having);
+    }
+
+
+
 
 filter_statement: 
     FILTER condition SEMICOLON { 
         $$ = FilterStatementSemanticAction($2); 
+    }
+    | FILTER OPEN_BRACE condition CLOSE_BRACE SEMICOLON {
+        $$ = FilterStatementSemanticAction($3);
     }
     ;
 
@@ -238,6 +275,8 @@ comparison_expression:
     | expression NOT_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, NOT_EQUALS_OP); }
     | expression LESS_THAN expression { $$ = ComparisonSemanticAction($1, $3, LESS_THAN_OP); }
     | expression GREATER_THAN expression { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN_OP); }
+    | expression GREATER_THAN_OR_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN_OR_EQUALS_OP); }
+    | expression LESS_THAN_OR_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, LESS_THAN_OR_EQUALS_OP); }
     ;
 
 expression: 
@@ -246,6 +285,9 @@ expression:
     | expression MUL expression { $$ = ArithmeticExpressionSemanticAction($1, $3, MULTIPLICATION); }
     | expression SUB expression { $$ = ArithmeticExpressionSemanticAction($1, $3, SUBTRACTION); }
     | factor { $$ = FactorExpressionSemanticAction($1); }
+    | COUNT OPEN_PARENTHESIS comparison_expression CLOSE_PARENTHESIS {
+        $$ = CountExpressionSemanticAction($3);
+    }
     ;
 
 factor: 

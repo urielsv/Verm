@@ -42,8 +42,6 @@ Program * MultiStatementProgramSemanticAction(CompilerState * state, Program * p
 
 /* Fields */
 Field * FieldSemanticAction(char * name, char * protocol);
-Field * FieldSemanticActionWithAlias(char * name, char * alias);
-Field * FieldSemanticActionWithFullAlias(char * name, char * protocol, char * alias);
 FieldList * createFieldList(Field * field);
 FieldList * appendToFieldList(FieldList * list, Field * newField);
 
@@ -62,7 +60,7 @@ Condition * FieldConditionSemanticAction(char * field1, char * field2);
 
 /* Statements */
 Statement * CaptureStatementSemanticAction(char * source, Condition * condition);
-Statement * ExtractStatementSemanticAction(FieldList * fields, char * source, Condition * condition);
+Statement* ExtractStatementSemanticAction(FieldList* fields, char* source, Condition* where, FieldList* groupFields, Condition* having);
 Statement * FilterStatementSemanticAction(Condition * condition);
 Statement * AlertStatementSemanticAction(Condition * trigger, char * message);
 Statement * GroupStatementSemanticAction(FieldList * group_fields, Condition * having);
@@ -77,6 +75,11 @@ Condition * MultiplePatternConditionsSemanticAction(Condition * conditions, Cond
 Condition * TimespanPatternConditionSemanticAction(ComparisonOperator op, int seconds);
 Condition * ComparisonSemanticAction(Expression * left, Expression * right, ComparisonOperator op);
 
+
+
+Expression* CountExpressionSemanticAction(Condition* inner);
+
+Condition* ExpressionConditionSemanticAction(Expression* expression);
 
 /* Wrappers */
 Statement * CaptureStatementSemanticActionWrapper(Statement * stmt);

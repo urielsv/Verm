@@ -23,7 +23,7 @@
  */
 digit           [0-9]
 letter          [a-zA-Z]
-identifier      {letter}({letter}|{digit})*
+identifier      [_a-zA-Z][_a-zA-Z0-9]*
 whitespace      [ \t\n\r]
 string          \"[^\"]*\"
 
@@ -83,6 +83,8 @@ string          \"[^\"]*\"
 "!="                        { return RelationalOperatorLexemeAction(createLexicalAnalyzerContext(), NOT_EQUALS); }
 "<"                         { return RelationalOperatorLexemeAction(createLexicalAnalyzerContext(), LESS_THAN); }
 ">"                         { return RelationalOperatorLexemeAction(createLexicalAnalyzerContext(), GREATER_THAN); }
+">="                        { return RelationalOperatorLexemeAction(createLexicalAnalyzerContext(), GREATER_THAN_OR_EQUALS); }
+"<="                        { return RelationalOperatorLexemeAction(createLexicalAnalyzerContext(), LESS_THAN_OR_EQUALS); }
 
 "("                         { return ParenthesisLexemeAction(createLexicalAnalyzerContext(), OPEN_PARENTHESIS); }
 ")"                         { return ParenthesisLexemeAction(createLexicalAnalyzerContext(), CLOSE_PARENTHESIS); }
@@ -91,15 +93,17 @@ string          \"[^\"]*\"
 ";"                         { return SemicolonLexemeAction(createLexicalAnalyzerContext(), SEMICOLON); }
 ","                         { return CommaLexemeAction(createLexicalAnalyzerContext(), COMMA); }
 
+"and"                       { return KeywordLexemeAction(createLexicalAnalyzerContext(), AND); }
+"or"                        { return KeywordLexemeAction(createLexicalAnalyzerContext(), OR); }
+
 {digit}+                    { return IntegerLexemeAction(createLexicalAnalyzerContext()); }
 {identifier}                { return IdentifierLexemeAction(createLexicalAnalyzerContext()); }
 {string}                    { return StringLexemeAction(createLexicalAnalyzerContext()); }
 
 {whitespace}+               { IgnoredLexemeAction(createLexicalAnalyzerContext()); }
-.                           { return UnknownLexemeAction(createLexicalAnalyzerContext()); }
+"."                         { return DotLexemeAction(createLexicalAnalyzerContext(), DOT); }
 
-"and"                       { return KeywordLexemeAction(createLexicalAnalyzerContext(), AND); }
-"or"                        { return KeywordLexemeAction(createLexicalAnalyzerContext(), OR); }
+
 
 %%
 

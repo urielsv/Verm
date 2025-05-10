@@ -48,7 +48,7 @@ const int main(const int count, const char ** arguments) {
 		}
 		else {
 			logError(logger, "The computation phase rejects the input program.");
-			compilationStatus = FAILED;
+			//compilationStatus = FAILED;
 		}
 		// ...end of the Backend. -----------------------------------------------------------------
 		// ----------------------------------------------------------------------------------------

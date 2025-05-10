@@ -41,6 +41,8 @@ Token ParenthesisLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, T
 Token BraceLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
 Token SemicolonLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
 Token CommaLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext, Token token);
+Token DotLexemeAction(LexicalAnalyzerContext * ctx, Token token);
+
 
 /* Literal Actions */
 Token IntegerLexemeAction(LexicalAnalyzerContext * lexicalAnalyzerContext);

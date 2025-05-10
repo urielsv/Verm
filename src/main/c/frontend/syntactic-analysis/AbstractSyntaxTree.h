@@ -27,11 +27,13 @@ typedef struct Field Field;
 /**
  * Operator types
  */
-typedef enum ComparisonOperator {
+ typedef enum ComparisonOperator {
     EQUALS_OP,
     NOT_EQUALS_OP,
     LESS_THAN_OP,
-    GREATER_THAN_OP
+    GREATER_THAN_OP,
+    GREATER_THAN_OR_EQUALS_OP,
+    LESS_THAN_OR_EQUALS_OP
 } ComparisonOperator;
 
 typedef enum LogicalOperator {
@@ -40,7 +42,7 @@ typedef enum LogicalOperator {
 } LogicalOperator;
 
 typedef enum ConditionType {
-    COMPARISON ,
+    COMPARISON = 0,
     LOGICAL_AND,
     LOGICAL_OR,
     LOGICAL_NOT
@@ -51,7 +53,8 @@ typedef enum ExpressionType {
     DIVISION,
     FACTOR,
     MULTIPLICATION,
-    SUBTRACTION
+    SUBTRACTION,
+    EXPRESSION_COUNT,
 } ExpressionType;
 
 typedef enum FactorType {
@@ -68,7 +71,6 @@ typedef enum StatementType {
     EXTRACT_STATEMENT,
     FILTER_STATEMENT,
     ALERT_STATEMENT,
-    GROUP_STATEMENT,
     DEFINE_STATEMENT,
     IMPORT_EXPORT_STATEMENT
 } StatementType;
@@ -126,6 +128,7 @@ struct Expression {
             Expression* leftExpression;  // Nombre que espera el generador
             Expression* rightExpression; // Nombre que espera el generador
         };
+        Condition* count; 
     };
 };
 
@@ -140,7 +143,7 @@ typedef struct {
 } GroupStatement;
 
 typedef enum {
-    PC_SAME, 
+    PC_SAME = 6, 
     PC_DIFFERENT,
     PC_COUNT,
     PC_TIMESPAN
@@ -183,7 +186,7 @@ typedef struct {
 typedef struct {
     FieldList* fields;
     char* source;
-    Condition* filter;
+    Condition* filter;   
 } ExtractStatement;
 
 typedef struct {
@@ -197,16 +200,16 @@ typedef struct Statement {
         ExtractStatement extract;
         FilterStatement filter;
         AlertStatement alert;
-        GroupStatement group;
         DefineStatement define;
         ImportExportStatement import_export;
     };
+    GroupStatement group;  
 } Statement;
 
 typedef struct Field {
     char* protocol;  
     char* name;
-    char* alias; 
+
 } Field;
 
 typedef struct FieldList {
@@ -236,10 +239,16 @@ typedef struct StatementList {
     struct StatementList* next;
 } StatementList;
 
+typedef enum {
+    PROGRAM_STATEMENTS,
+    PROGRAM_EXPRESSION
+} ProgramType;
+
 typedef struct Program {
+    ProgramType type;
     union {
-        StatementList* statements; 
-        Expression* expression;     
+        StatementList* statements;
+        Expression* expression;
     };
 } Program;
 
