@@ -173,7 +173,7 @@ Constant* StringConstantSemanticAction(char* value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Constant* constant = malloc(sizeof(Constant));
     constant->value.type = STRING_TYPE;
-    constant->value.string = strdup(value);
+    constant->value.string = value;
     return constant;
 }
 
@@ -304,7 +304,6 @@ Field* FieldSemanticAction(char* name, char* protocol) {
 
 
 FieldList* createFieldList(Field* field) {
-    printf("[DEBUGPRINT]createFieldList: %p\n", field);
     _logSyntacticAnalyzerAction(__FUNCTION__);
     FieldList* list = calloc(1, sizeof(FieldList));
     list->field = field;
@@ -313,7 +312,6 @@ FieldList* createFieldList(Field* field) {
 }
 
 FieldList* appendToFieldList(FieldList* list, Field* newField) {
-    printf("[DEBUGPRINT]appendToFieldList: list = %p, field = %p\n", list, newField);
     _logSyntacticAnalyzerAction(__FUNCTION__);
     FieldList* new_node = calloc(1, sizeof(FieldList));
     new_node->field = newField;
