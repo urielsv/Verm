@@ -72,7 +72,8 @@ typedef enum StatementType {
     FILTER_STATEMENT,
     ALERT_STATEMENT,
     DEFINE_STATEMENT,
-    IMPORT_EXPORT_STATEMENT
+    IMPORT_STATEMENT,
+    EXPORT_STATEMENT,
 } StatementType;
 
 typedef enum ValueType {
@@ -152,10 +153,10 @@ typedef enum {
 typedef struct {
     PatternConditionType type;
     union {
-        struct { char* field; } same;
-        struct { char* field; } different;
+        struct { Field* field; } same;
+        struct { Field* field; } different;
         struct {
-            char* field;
+            Field* field;
             ComparisonOperator op;
             int value;
         } count;
@@ -174,7 +175,6 @@ typedef struct {
 
 typedef struct {
     char* filename;
-    bool is_export;
     char* export_data;
 } ImportExportStatement;
 
@@ -185,7 +185,6 @@ typedef struct {
 
 typedef struct {
     FieldList* fields;
-    char* source;
     Condition* filter;   
 } ExtractStatement;
 

@@ -48,9 +48,9 @@ FieldList * appendToFieldList(FieldList * list, Field * newField);
 /* Conditions */
 Condition * ComparisonConditionSemanticAction(Expression * left, Expression * right, ComparisonOperator op);
 Condition * LogicalConditionSemanticAction(Condition * left, Condition * right, LogicalOperator op);
-Condition * SameConditionSemanticAction(char * field);
-Condition * DifferentConditionSemanticAction(char * field);
-Condition * CountConditionSemanticAction(char * field, ComparisonOperator op, int value);
+Condition * SameConditionSemanticAction(Field * field);
+Condition * DifferentConditionSemanticAction(Field * field);
+Condition * CountConditionSemanticAction(Field * field, ComparisonOperator op, int value);
 Condition * TimespanConditionSemanticAction(ComparisonOperator op, int seconds);
 Condition * EmptyHavingClauseSemanticAction();
 Condition * HavingClauseSemanticAction(Condition * condition);
@@ -60,7 +60,7 @@ Condition * FieldConditionSemanticAction(char * field1, char * field2);
 
 /* Statements */
 Statement * CaptureStatementSemanticAction(char * source, Condition * condition);
-Statement* ExtractStatementSemanticAction(FieldList* fields, char* source, Condition* where, FieldList* groupFields, Condition* having);
+Statement* ExtractStatementSemanticAction(FieldList* fields, Condition* where, FieldList* groupFields, Condition* having);
 Statement * FilterStatementSemanticAction(Condition * condition);
 Statement * AlertStatementSemanticAction(Condition * trigger, char * message);
 Statement * GroupStatementSemanticAction(FieldList * group_fields, Condition * having);
@@ -68,9 +68,9 @@ Statement * DefineStatementSemanticAction(char * pattern_name, PatternCondition 
 Statement * ImportStatementSemanticAction(char * filename);
 Statement * ExportStatementSemanticAction(char * data, char * filename);
 
-Condition * SamePatternConditionSemanticAction(char * field);
-Condition * DifferentPatternConditionSemanticAction(char * field);
-Condition * CountPatternConditionSemanticAction(char * field, ComparisonOperator op, int value);
+Condition * SamePatternConditionSemanticAction(Field * field);
+Condition * DifferentPatternConditionSemanticAction(Field * field);
+Condition * CountPatternConditionSemanticAction(Field * field, ComparisonOperator op, int value);
 Condition * MultiplePatternConditionsSemanticAction(Condition * conditions, Condition * newCondition);
 Condition * TimespanPatternConditionSemanticAction(ComparisonOperator op, int seconds);
 Condition * ComparisonSemanticAction(Expression * left, Expression * right, ComparisonOperator op);
@@ -94,4 +94,5 @@ Statement * ImportExportStatementSemanticActionWrapper(Statement * stmt);
 /* utils */
 PatternCondition* convertConditionsToPatterns(Condition* cond); 
 int countConditions(Condition* cond);
+Field* createSimpleField(char* name, char* protocol);
 #endif

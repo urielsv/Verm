@@ -1,8 +1,9 @@
 // Extract specific fields and filter
+import from "capture.pcap";
+
 extract {
     ip.src_addr,
     http.method,
     http.response_code
 } 
-from "capture.pcap"
 where status >= 400; 

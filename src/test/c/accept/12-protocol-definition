@@ -1,7 +1,0 @@
-// Protocol definition with multiple fields
-define PROTOCOL HTTP {
-    method: string,
-    path: string,
-    response_code: integer,
-    content_type: string
-}; 

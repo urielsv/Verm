@@ -51,7 +51,6 @@ string          \"[^\"]*\"
 "order"                     { return KeywordLexemeAction(createLexicalAnalyzerContext(), ORDER); }
 "by"                        { return KeywordLexemeAction(createLexicalAnalyzerContext(), BY); }
 "from"                      { return KeywordLexemeAction(createLexicalAnalyzerContext(), FROM); }
-"as"                        { return KeywordLexemeAction(createLexicalAnalyzerContext(), AS); }
 
 "alert"                     { return KeywordLexemeAction(createLexicalAnalyzerContext(), ALERT); }
 "when"                      { return KeywordLexemeAction(createLexicalAnalyzerContext(), WHEN); }
@@ -62,6 +61,7 @@ string          \"[^\"]*\"
 "different"                 { return KeywordLexemeAction(createLexicalAnalyzerContext(), DIFFERENT); }
 
 "define"                    { return KeywordLexemeAction(createLexicalAnalyzerContext(), DEFINE); }
+"matches"                   { return KeywordLexemeAction(createLexicalAnalyzerContext(), MATCHES); }
 "import"                    { return KeywordLexemeAction(createLexicalAnalyzerContext(), IMPORT); }
 "export"                    { return KeywordLexemeAction(createLexicalAnalyzerContext(), EXPORT); }
 "table"                     { return KeywordLexemeAction(createLexicalAnalyzerContext(), TABLE); }

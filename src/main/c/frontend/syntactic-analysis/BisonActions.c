@@ -33,77 +33,96 @@ static void _logSyntacticAnalyzerAction(const char * functionName) {
 
 
 int countConditions(Condition* cond) {
-    int count = 0;
-    while (cond) {
-        count++;
-        cond = cond->logical.right;
+    if (!cond) return 0;
+
+    if (cond->type == LOGICAL_AND) {
+        return countConditions(cond->logical.left) + countConditions(cond->logical.right);
+    } else if (cond->type >= PC_SAME && cond->type <= PC_TIMESPAN) {
+        return 1;
+    } else {
+        fprintf(stderr, "[countConditions] Unexpected condition type %d\n", cond->type);
+        exit(1);
     }
-    return count;
 }
+
 
 PatternCondition* convertConditionsToPatterns(Condition* cond) {
     int count = countConditions(cond);
     PatternCondition* patterns = malloc(count * sizeof(PatternCondition));
-    
+
     for (int i = 0; i < count; i++) {
-        patterns[i] = cond->pattern;
-        cond = cond->logical.right;
+        if (cond == NULL) break;
+
+        if (cond->type >= PC_SAME && cond->type <= PC_TIMESPAN) {
+            patterns[i] = cond->pattern;
+            cond = NULL; 
+        } else if (cond->type == LOGICAL_AND) {
+            patterns[i] = cond->logical.left->pattern;
+            cond = cond->logical.right;
+        } else {
+            fprintf(stderr, "[convertConditionsToPatterns] Unexpected condition type %d\n", cond->type);
+            exit(1); 
+        }
     }
-    
+    releaseCondition(cond); 
     return patterns;
 }
 
+
 /* ==================== FUNCIONES DE CONDICIONES ==================== */
 
-Condition* SamePatternConditionSemanticAction(char* field) {
+Condition* SamePatternConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_SAME;
     cond->pattern.type = PC_SAME;
-    cond->pattern.same.field = strdup(field);
+    cond->pattern.same.field = field;
+     free(field->name);
+    free(field->protocol);
     return cond;
 }
 
-Condition* DifferentPatternConditionSemanticAction(char* field) {
+Condition* DifferentPatternConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_DIFFERENT;
     cond->pattern.type = PC_DIFFERENT;
-    cond->pattern.different.field = strdup(field);
+    cond->pattern.same.field = field;
+    free(field->name);
+    free(field->protocol);
     return cond;
 }
 
-Condition* CountPatternConditionSemanticAction(char* field, ComparisonOperator op, int value) {
+Condition* CountPatternConditionSemanticAction(Field* field, ComparisonOperator op, int value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_COUNT;
     cond->pattern.type = PC_COUNT;
-    cond->pattern.count.field = strdup(field);
+    cond->pattern.same.field = field;
     cond->pattern.count.op = op;
     cond->pattern.count.value = value;
+    free(field->name);
+    free(field->protocol);
     return cond;
 }
 
 Condition* MultiplePatternConditionsSemanticAction(Condition* conditions, Condition* newCondition) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
-    // Combinar condiciones con AND lógico
     Condition* combined = calloc(1, sizeof(Condition));
     combined->type = LOGICAL_AND;
     combined->logical.left = conditions;
     combined->logical.right = newCondition;
     combined->logical.op = AND_OP;
-    return combined;
+    return combined;    
 }
 
 Condition* ParenthesizedConditionSemanticAction(Condition* condition) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
-    // En esta implementación básica, simplemente retornamos la misma condición
     return condition;
 }
 
 Condition* IdentifierConditionSemanticAction(char* identifier) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
-    // Tratar identificador como una condición de campo
     return FieldConditionSemanticAction(identifier, NULL);
 }
 
@@ -113,13 +132,13 @@ Condition* FieldConditionSemanticAction(char* field1, char* field2) {
     cond->type = PC_SAME;
     cond->pattern.type = PC_SAME;
     
-    if (field2) {
-        char* fullName = malloc(strlen(field1) + strlen(field2) + 2);
-        sprintf(fullName, "%s.%s", field1, field2);
-        cond->pattern.same.field = fullName;
-    } else {
-        cond->pattern.same.field = strdup(field1);
-    }
+   if (field2) {
+    char* fullName = malloc(strlen(field1) + strlen(field2) + 2);
+    sprintf(fullName, "%s.%s", field1, field2);
+    cond->pattern.same.field = createSimpleField(fullName, NULL);
+} else {
+    cond->pattern.same.field = createSimpleField(field1, NULL);
+}
     
     return cond;
 }
@@ -349,30 +368,30 @@ Condition* LogicalConditionSemanticAction(Condition* left, Condition* right, Log
     return cond;
 }
 
-Condition* SameConditionSemanticAction(char* field) {
+Condition* SameConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_SAME;
     cond->pattern.type = PC_SAME;
-    cond->pattern.same.field = strdup(field);
+    cond->pattern.same.field = field;
     return cond;
 }
 
-Condition* DifferentConditionSemanticAction(char* field) {
+Condition* DifferentConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_DIFFERENT;
     cond->pattern.type = PC_DIFFERENT;
-    cond->pattern.different.field = strdup(field);
+    cond->pattern.different.field = field;
     return cond;
 }
 
-Condition* CountConditionSemanticAction(char* field, ComparisonOperator op, int value) {
+Condition* CountConditionSemanticAction(Field* field, ComparisonOperator op, int value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_COUNT;
     cond->pattern.type = PC_COUNT;
-    cond->pattern.count.field = strdup(field);
+    cond->pattern.count.field = field;
     cond->pattern.count.op = op;
     cond->pattern.count.value = value;
     return cond;
@@ -409,12 +428,11 @@ Statement* CaptureStatementSemanticAction(char* source, Condition* condition) {
     return stmt;
 }
 
-Statement* ExtractStatementSemanticAction(FieldList* fields, char* source, Condition* filter, FieldList* group_fields, Condition* having) {
+Statement* ExtractStatementSemanticAction(FieldList* fields, Condition* filter, FieldList* group_fields, Condition* having) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Statement* stmt = calloc(1, sizeof(Statement));
     stmt->type = EXTRACT_STATEMENT;
     stmt->extract.fields = fields;
-    stmt->extract.source = source;
     stmt->extract.filter = filter;
     stmt->group.group_fields = group_fields;
     stmt->group.having = having;              
@@ -462,19 +480,38 @@ Statement* DefineStatementSemanticAction(char* pattern_name, PatternCondition* c
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Statement* stmt = calloc(1, sizeof(Statement));
     stmt->type = DEFINE_STATEMENT;
-    stmt->define.pattern_name = strdup(pattern_name);
+    stmt->define.pattern_name = pattern_name;
     stmt->define.conditions = malloc(count * sizeof(PatternCondition));
-    memcpy(stmt->define.conditions, conditions, count * sizeof(PatternCondition));
-    stmt->define.condition_count = count;
+for (int i = 0; i < count; i++) {
+    PatternCondition* src = &conditions[i];
+    PatternCondition* dst = &stmt->define.conditions[i];
+    dst->type = src->type;
+    switch (src->type) {
+        case PC_SAME:
+            dst->same.field = src->same.field;
+            break;
+        case PC_DIFFERENT:
+            dst->different.field = src->different.field;
+            break;
+        case PC_COUNT:
+            dst->count.field = src->count.field;
+            dst->count.op = src->count.op;
+            dst->count.value = src->count.value;
+            break;
+        case PC_TIMESPAN:
+            dst->timespan.op = src->timespan.op;
+            dst->timespan.seconds = src->timespan.seconds;
+            break;
+    }
+}    stmt->define.condition_count = count;
     return stmt;
 }
 
 Statement* ImportStatementSemanticAction(char* filename) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Statement* stmt = calloc(1, sizeof(Statement));
-    stmt->type = IMPORT_EXPORT_STATEMENT;
-    stmt->import_export.is_export = false;
-    stmt->import_export.filename = strdup(filename);
+    stmt->type = IMPORT_STATEMENT;
+    stmt->import_export.filename = filename;
     stmt->import_export.export_data = NULL;
     return stmt;
 }
@@ -482,10 +519,9 @@ Statement* ImportStatementSemanticAction(char* filename) {
 Statement* ExportStatementSemanticAction(char* data, char* filename) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Statement* stmt = calloc(1, sizeof(Statement));
-    stmt->type = IMPORT_EXPORT_STATEMENT;
-    stmt->import_export.is_export = true;
-    stmt->import_export.filename = strdup(filename);
-    stmt->import_export.export_data = strdup(data);
+    stmt->type = EXPORT_STATEMENT;
+    stmt->import_export.filename = filename;
+    stmt->import_export.export_data = data;
     return stmt;
 }
 
@@ -524,4 +560,18 @@ Statement* DefineStatementSemanticActionWrapper(Statement* stmt) {
 Statement* ImportExportStatementSemanticActionWrapper(Statement* stmt) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     return stmt;
+}
+
+Field* createSimpleField(char* name, char* protocol) {
+    Field* field = calloc(1, sizeof(Field));
+    
+    if(strcmp(name, "*") == 0) {
+        field->name = name;
+        field->protocol = NULL;
+        return field;
+    }
+    field->name = name;
+    field->protocol = NULL;
+    free(name);
+    return field;
 }

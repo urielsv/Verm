@@ -78,9 +78,6 @@ void releaseStatement(Statement * statement) {
             break;
 
         case EXTRACT_STATEMENT:
-            if (statement->extract.source != NULL) {
-                free(statement->extract.source);
-            }
             if (statement->extract.fields != NULL) {
                 releaseFieldList(statement->extract.fields);
             }            
@@ -114,16 +111,27 @@ void releaseStatement(Statement * statement) {
 
         case DEFINE_STATEMENT:
             free(statement->define.pattern_name);
-            for (int i = 0; i < statement->define.condition_count; i++) {
-                PatternCondition* pc = &statement->define.conditions[i];
-                if (pc->type == PC_SAME || pc->type == PC_DIFFERENT || pc->type == PC_COUNT) {
-                    free(pc->same.field); 
-                }
-            }
+           for (int i = 0; i < statement->define.condition_count; i++) {
+    PatternCondition* pc = &statement->define.conditions[i];
+    switch (pc->type) {
+        case PC_SAME:
+            free(pc->same.field);
+            break;
+        case PC_DIFFERENT:
+            free(pc->different.field);
+            break;
+        case PC_COUNT:
+            free(pc->count.field);
+            break;
+        case PC_TIMESPAN:
+        
+            break;
+        }
+    }
             free(statement->define.conditions);
             break;
-
-        case IMPORT_EXPORT_STATEMENT:
+        case IMPORT_STATEMENT:
+        case EXPORT_STATEMENT:
             free(statement->import_export.filename);
             if (statement->import_export.export_data != NULL) {
                 free(statement->import_export.export_data);
@@ -160,7 +168,6 @@ void releaseCondition(Condition * condition) {
                 switch (condition->pattern.type) {
                     case PC_SAME:
                     case PC_DIFFERENT:
-                               (void*)condition->pattern.same.field);
                         if (condition->pattern.same.field) {
                             free(condition->pattern.same.field);
                         }
@@ -184,7 +191,6 @@ void releaseCondition(Condition * condition) {
 
 void releaseField(Field * field) {
     if (field == NULL) return;
-
     if (field->protocol != NULL) {
         free(field->protocol);
     }

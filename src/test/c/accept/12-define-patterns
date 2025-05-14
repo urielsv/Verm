@@ -1,0 +1,13 @@
+// Protocol definition with multiple fields
+import from "capture.pcap";
+
+
+define scan_patterns {
+    same ip.src_addr,
+    different tcp.dst_port,
+    count(tcp.dst_port) > 5,
+    timespan < 5
+}; 
+
+
+filter matches scan_patterns;
