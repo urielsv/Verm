@@ -169,10 +169,7 @@ pattern_condition:
     | DIFFERENT field { $$ = DifferentPatternConditionSemanticAction($2); }
     | comparison_expression { $$ = $1; }  
     | count_pattern { $$ = $1; }
-    | TIMESPAN EQUALS expression { $$ = TimespanPatternConditionSemanticAction(EQUALS_OP, $3); }
-    | TIMESPAN NOT_EQUALS expression { $$ = TimespanPatternConditionSemanticAction(NOT_EQUALS_OP, $3); }
-    | TIMESPAN LESS_THAN expression { $$ = TimespanPatternConditionSemanticAction(LESS_THAN_OP, $3); }
-    | TIMESPAN GREATER_THAN expression { $$ = TimespanPatternConditionSemanticAction(GREATER_THAN_OP, $3); }
+    | TIMESPAN comparison_operator expression { $$ = TimespanPatternConditionSemanticAction($2, $3); }
     ;
 
 pattern_conditions:
@@ -206,24 +203,11 @@ condition:
     comparison_expression { $$ = $1; }
     | logical_expression { $$ = $1; }
     | OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = ParenthesizedConditionSemanticAction($2); }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS GREATER_THAN expression {
-        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), GREATER_THAN_OP, $6);
-    }
-        | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS EQUALS expression {
-        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), EQUALS_OP, $6);
-    }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS NOT_EQUALS expression {
-        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), NOT_EQUALS_OP, $6);
-    }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS LESS_THAN expression {
-        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), LESS_THAN_OP, $6);
-    }
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), $5, $6); }
     | SAME field { $$ = SameConditionSemanticAction($2); }
     | DIFFERENT field { $$ = DifferentConditionSemanticAction($2); }
-    | TIMESPAN EQUALS expression { $$ = TimespanPatternConditionSemanticAction(EQUALS_OP, $3); }
-    | TIMESPAN NOT_EQUALS expression { $$ = TimespanPatternConditionSemanticAction(NOT_EQUALS_OP, $3); }
-    | TIMESPAN LESS_THAN expression { $$ = TimespanPatternConditionSemanticAction(LESS_THAN_OP, $3); }
-    | TIMESPAN GREATER_THAN expression { $$ = TimespanPatternConditionSemanticAction(GREATER_THAN_OP, $3); }
+    | TIMESPAN comparison_operator expression { $$ = TimespanPatternConditionSemanticAction($2, $3); }
     ;
 
 capture_statement: 
@@ -290,12 +274,7 @@ logical_expression:
     ;
 
 comparison_expression: 
-    expression EQUALS expression { $$ = ComparisonSemanticAction($1, $3, EQUALS_OP); }
-    | expression NOT_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, NOT_EQUALS_OP); }
-    | expression LESS_THAN expression { $$ = ComparisonSemanticAction($1, $3, LESS_THAN_OP); }
-    | expression GREATER_THAN expression { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN_OP); }
-    | expression GREATER_THAN_OR_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, GREATER_THAN_OR_EQUALS_OP); }
-    | expression LESS_THAN_OR_EQUALS expression { $$ = ComparisonSemanticAction($1, $3, LESS_THAN_OR_EQUALS_OP); }
+    expression comparison_operator expression { $$ = ComparisonSemanticAction($1, $3, $2); }
     ;
 
 expression: 
