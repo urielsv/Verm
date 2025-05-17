@@ -144,7 +144,7 @@ Condition* IdentifierConditionSemanticAction(char* identifier) {
 Condition* FieldConditionSemanticAction(char* field1, char* field2) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_SAME;
+    cond->type = PATTERN_CONDITION;
     cond->pattern.type = PC_SAME;
     
    if (field2) {
