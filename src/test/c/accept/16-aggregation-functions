@@ -1,0 +1,7 @@
+alert when sum(http.response_time) > 3000 send to "alerta.txt";
+
+alert when avg(tcp.window_size) < 500 send to "alerta.txt";
+
+alert when min(http.status_code) == 500 send to "alerta.txt";
+
+alert when max(udp.length) >= 1024 send to "alerta.txt";

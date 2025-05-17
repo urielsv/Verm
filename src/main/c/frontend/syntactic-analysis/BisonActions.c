@@ -34,10 +34,9 @@ static void _logSyntacticAnalyzerAction(const char * functionName) {
 
 int countConditions(Condition* cond) {
     if (!cond) return 0;
-
     if (cond->type == LOGICAL_AND) {
         return countConditions(cond->logical.left) + countConditions(cond->logical.right);
-    } else if (cond->type >= PC_SAME && cond->type <= PC_TIMESPAN) {
+    } else if (cond->type == PATTERN_CONDITION) {
         return 1;
     } else {
         fprintf(stderr, "[countConditions] Unexpected condition type %d\n", cond->type);
@@ -45,19 +44,17 @@ int countConditions(Condition* cond) {
     }
 }
 
-
 static void flattenConditions(Condition* cond, PatternCondition* out, int* index) {
     if (!cond) return;
-
     if (cond->type == LOGICAL_AND) {
         flattenConditions(cond->logical.left, out, index);
         flattenConditions(cond->logical.right, out, index);
         printf("[DEBUG][convert] Freeing LOGICAL_AND node @ %p\n", (void*)cond);
-        free(cond);  // solo nodo, no recursivo
-    } else {
+        free(cond);
+    } else if (cond->type == PATTERN_CONDITION) {
+        printf("[DEBUG][convert] Flattening PATTERN_CONDITION @ %p\n", (void*)cond);
         PatternCondition* pc = &out[(*index)++];
         pc->type = cond->pattern.type;
-
         switch (cond->pattern.type) {
             case PC_SAME:
                 pc->same.field = cond->pattern.same.field;
@@ -65,19 +62,22 @@ static void flattenConditions(Condition* cond, PatternCondition* out, int* index
             case PC_DIFFERENT:
                 pc->different.field = cond->pattern.different.field;
                 break;
-            case PC_COUNT:
-                pc->count.field = cond->pattern.count.field;
-                pc->count.op = cond->pattern.count.op;
-                pc->count.value = cond->pattern.count.value;
+            case PC_AGGREGATION:
+                pc->aggregation.func = cond->pattern.aggregation.func;
+                pc->aggregation.field = cond->pattern.aggregation.field;
+                pc->aggregation.op = cond->pattern.aggregation.op;
+                pc->aggregation.value = cond->pattern.aggregation.value;
                 break;
             case PC_TIMESPAN:
                 pc->timespan.op = cond->pattern.timespan.op;
                 pc->timespan.value = cond->pattern.timespan.value;
                 break;
         }
-
         printf("[DEBUG][convert] Flattened pattern type %d from Condition @ %p\n", pc->type, (void*)cond);
-        free(cond);  
+        free(cond);
+    } else {
+        fprintf(stderr, "[flattenConditions] Unexpected condition type %d\n", cond->type);
+        exit(1);
     }
 }
 
@@ -99,7 +99,7 @@ PatternCondition* convertConditionsToPatterns(Condition* cond) {
 Condition* SamePatternConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_SAME;
+    cond->type = PATTERN_CONDITION;
     cond->pattern.type = PC_SAME;
     cond->pattern.same.field = field;
     return cond;
@@ -108,9 +108,9 @@ Condition* SamePatternConditionSemanticAction(Field* field) {
 Condition* DifferentPatternConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_DIFFERENT;
+    cond->type = PATTERN_CONDITION;
     cond->pattern.type = PC_DIFFERENT;
-    cond->pattern.same.field = field;
+    cond->pattern.different.field = field;
     return cond;
 }
 
@@ -162,7 +162,7 @@ Condition* FieldConditionSemanticAction(char* field1, char* field2) {
 Condition* TimespanPatternConditionSemanticAction(ComparisonOperator op, Expression* value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_TIMESPAN;
+    cond->type = PATTERN_CONDITION;
     cond->pattern.type = PC_TIMESPAN;
     cond->pattern.timespan.op = op;
     cond->pattern.timespan.value = value;
@@ -406,10 +406,7 @@ Statement* ExtractStatementSemanticAction(FieldList* fields, Condition* filter, 
 
 Expression* CountExpressionSemanticAction(Condition* inner) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
-    Expression* expr = calloc(1, sizeof(Expression));
-    expr->type = EXPRESSION_COUNT;
-    expr->count = inner;
-    return expr;
+    return AggregationExpressionSemanticAction(inner, AGGREGATION_COUNT);
 }
 
 Condition* ExpressionConditionSemanticAction(Expression* expression) {
@@ -458,11 +455,12 @@ for (int i = 0; i < count; i++) {
         case PC_DIFFERENT:
             dst->different.field = src->different.field;
             break;
-        case PC_COUNT:
-            dst->count.field = src->count.field;
-            dst->count.op = src->count.op;
-            dst->count.value = src->count.value;
-            break;
+       case PC_AGGREGATION:
+    dst->aggregation.func = src->aggregation.func;
+    dst->aggregation.field = src->aggregation.field;
+    dst->aggregation.op = src->aggregation.op;
+    dst->aggregation.value = src->aggregation.value;
+    break;
         case PC_TIMESPAN:
             dst->timespan.op = src->timespan.op;
             dst->timespan.value = src->timespan.value;
@@ -570,12 +568,34 @@ Statement* VariableDeclarationStatementSemanticAction(VariableDeclaration* decl)
 
 Condition* CountPatternConditionExpressionSemanticAction(Field* field, ComparisonOperator op, Expression* value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
+    return AggregationPatternConditionSemanticAction(field, op, value, AGGREGATION_COUNT);
+}
+
+Condition* AggregationPatternConditionSemanticAction(Field* field, ComparisonOperator op, Expression* value, ExpressionType aggType) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    if (field && strcmp(field->name, "*") == 0 && aggType != AGGREGATION_COUNT) {
+        logError(_logger, "Aggregation function %d cannot be applied to '*'", aggType);
+        releaseField(field);
+        releaseExpression(value);
+        return NULL;
+    }
     Condition* cond = calloc(1, sizeof(Condition));
-        printf("[CREATE] CountCondition @ %p (Field @ %p, Expression @ %p)\n", cond, field, value);
-    cond->type = PC_COUNT;
-    cond->pattern.type = PC_COUNT;
-    cond->pattern.count.field = field;
-    cond->pattern.count.op = op;
-    cond->pattern.count.value = value;
+    printf("[CREATE] AggregationCondition @ %p (Field @ %p, Expression @ %p, Type %d)\n", cond, field, value, aggType);
+    cond->type = PATTERN_CONDITION;
+    cond->pattern.type = PC_AGGREGATION;
+    cond->pattern.aggregation.func = (aggType == AGGREGATION_COUNT) ? AGG_COUNT :
+                                    (aggType == AGGREGATION_SUM) ? AGG_SUM :
+                                    (aggType == AGGREGATION_AVG) ? AGG_AVG :
+                                    (aggType == AGGREGATION_MIN) ? AGG_MIN : AGG_MAX;
+    cond->pattern.aggregation.field = field;
+    cond->pattern.aggregation.op = op;
+    cond->pattern.aggregation.value = value;
     return cond;
+}
+Expression* AggregationExpressionSemanticAction(Condition* condition, ExpressionType aggType) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Expression* expr = calloc(1, sizeof(Expression));
+    expr->type = aggType;
+    expr->aggregation = condition;
+    return expr;
 }

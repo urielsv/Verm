@@ -30,9 +30,13 @@ void releaseExpression(Expression * expression) {
             case FACTOR:
                 releaseFactor(expression->factor);
                 break;
-            case EXPRESSION_COUNT:
-            releaseCondition(expression->count);
-                break;
+            case AGGREGATION_COUNT:
+            case AGGREGATION_SUM:   
+            case AGGREGATION_AVG:
+            case AGGREGATION_MIN:
+            case AGGREGATION_MAX:
+            releaseCondition(expression->aggregation);
+            break;
         }
         free(expression);
     }
@@ -109,7 +113,7 @@ void releaseStatement(Statement * statement) {
             free(statement->alert.message);
             break;
 
-       case DEFINE_STATEMENT:
+   case DEFINE_STATEMENT:
     printf("[DEBUG][releaseStatement] Freeing DEFINE_STATEMENT...\n");
     free(statement->define.pattern_name);
     for (int i = 0; i < statement->define.condition_count; i++) {
@@ -124,11 +128,11 @@ void releaseStatement(Statement * statement) {
                 printf("[DEBUG][releaseStatement] → Releasing DIFFERENT field @ %p\n", (void*)pc->different.field);
                 releaseField(pc->different.field);
                 break;
-            case PC_COUNT:
-                printf("[DEBUG][releaseStatement] → Releasing COUNT field @ %p and expr @ %p\n",
-                       (void*)pc->count.field, (void*)pc->count.value);
-                releaseField(pc->count.field);
-                releaseExpression(pc->count.value);
+            case PC_AGGREGATION:
+                printf("[DEBUG][releaseStatement] → Releasing AGGREGATION field @ %p and expr @ %p\n",
+                       (void*)pc->aggregation.field, (void*)pc->aggregation.value);
+                releaseField(pc->aggregation.field);
+                releaseExpression(pc->aggregation.value);
                 break;
             case PC_TIMESPAN:
                 printf("[DEBUG][releaseStatement] → Releasing TIMESPAN expr @ %p\n", (void*)pc->timespan.value);
@@ -157,52 +161,46 @@ void releaseCondition(Condition * condition) {
     if (condition == NULL) {
         return;
     }
-
-        printf("[FREE] Condition @ %p (type=%d)\n", condition, condition->type);
-
-
+    printf("[FREE] Condition @ %p (type=%d)\n", condition, condition->type);
     switch (condition->type) {
         case COMPARISON:
             releaseExpression(condition->comparison.left);
             releaseExpression(condition->comparison.right);
             break;
-
         case LOGICAL_AND:
         case LOGICAL_OR:
             releaseCondition(condition->logical.left);
             releaseCondition(condition->logical.right);
             break;
-
         case LOGICAL_NOT:
             releaseCondition(condition->logical.left);
             break;
-
-           default:
-            if (condition->type >= PC_SAME && condition->type <= PC_TIMESPAN) {
-                switch (condition->pattern.type) {
-                    case PC_SAME:
-                            releaseField(condition->pattern.same.field);
-                        break;
-                    case PC_DIFFERENT:
-                            releaseField(condition->pattern.different.field);
-                        break;
-                    case PC_COUNT:
-                            releaseField(condition->pattern.count.field);
-                            releaseExpression(condition->pattern.count.value);
-                        break;
-
-                    case PC_TIMESPAN:
-                        if(condition->pattern.timespan.value != NULL) {
-                            releaseExpression(condition->pattern.timespan.value);
-                        }
-                        break;
-                }
-            } else {
-                logError(_logger, "Unknown condition type: %d", condition->type);
+        case PATTERN_CONDITION:
+            switch (condition->pattern.type) {
+                case PC_SAME:
+                    releaseField(condition->pattern.same.field);
+                    break;
+                case PC_DIFFERENT:
+                    releaseField(condition->pattern.different.field);
+                    break;
+                case PC_AGGREGATION:
+                    releaseField(condition->pattern.aggregation.field);
+                    releaseExpression(condition->pattern.aggregation.value);
+                    break;
+                case PC_TIMESPAN:
+                    if (condition->pattern.timespan.value != NULL) {
+                        releaseExpression(condition->pattern.timespan.value);
+                    }
+                    break;
+                default:
+                    logError(_logger, "Unknown pattern condition type: %d", condition->pattern.type);
+                    break;
             }
             break;
+        default:
+            logError(_logger, "Unknown condition type: %d", condition->type);
+            break;
     }
-
     free(condition);
 }
 

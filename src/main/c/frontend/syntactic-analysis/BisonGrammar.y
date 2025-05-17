@@ -45,6 +45,7 @@
 
 /** Data operation tokens */
 %token <token> EXTRACT CAPTURE FILTER GROUP COUNT WHERE HAVING ORDER BY FROM 
+%token <token> SUM AVG MIN MAX
 
 /** Alert tokens */
 %token <token> ALERT WHEN SEND TO
@@ -69,6 +70,7 @@
 %token <token> GREATER_THAN_OR_EQUALS LESS_THAN_OR_EQUALS
 
 
+
 /** Delimiter tokens */
 %token <token> OPEN_PARENTHESIS CLOSE_PARENTHESIS
 %token <token> OPEN_BRACE CLOSE_BRACE
@@ -90,7 +92,7 @@
 %type <field> field
 %type <condition> where_clause
 %type <groupStatement> group_clause
-%type <condition> count_pattern
+%type <condition> aggregation_pattern
 %type <comparisonOperator> comparison_operator
 %type <variableDeclaration> variable_declaration
 
@@ -149,9 +151,21 @@ comparison_operator:
 ;
 
 
-count_pattern:
+aggregation_pattern:
     COUNT OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator expression {
-        $$ = CountPatternConditionExpressionSemanticAction($3, $5, $6);
+        $$ = AggregationPatternConditionSemanticAction($3, $5, $6, AGGREGATION_COUNT);
+    }
+    | SUM OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction($3, $5, $6, AGGREGATION_SUM);
+    }
+    | AVG OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction($3, $5, $6, AGGREGATION_AVG);
+    }
+    | MIN OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction($3, $5, $6, AGGREGATION_MIN);
+    }
+    | MAX OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction($3, $5, $6, AGGREGATION_MAX);
     }
     ;
 
@@ -168,7 +182,7 @@ pattern_condition:
     SAME field { $$ = SamePatternConditionSemanticAction($2); }
     | DIFFERENT field { $$ = DifferentPatternConditionSemanticAction($2); }
     | comparison_expression { $$ = $1; }  
-    | count_pattern { $$ = $1; }
+    | aggregation_pattern { $$ = $1; }
     | TIMESPAN comparison_operator expression { $$ = TimespanPatternConditionSemanticAction($2, $3); }
     ;
 
@@ -203,8 +217,22 @@ condition:
     comparison_expression { $$ = $1; }
     | logical_expression { $$ = $1; }
     | OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = ParenthesizedConditionSemanticAction($2); }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
-        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), $5, $6); }
+    | aggregation_pattern { $$ = $1; }
+   | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction(createSimpleField("*", NULL), $5, $6, AGGREGATION_COUNT);
+    }
+    | SUM OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction(createSimpleField("*", NULL), $5, $6, AGGREGATION_SUM);
+    }
+    | AVG OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction(createSimpleField("*", NULL), $5, $6, AGGREGATION_AVG);
+    }
+    | MIN OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction(createSimpleField("*", NULL), $5, $6, AGGREGATION_MIN);
+    }
+    | MAX OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = AggregationPatternConditionSemanticAction(createSimpleField("*", NULL), $5, $6, AGGREGATION_MAX);
+    }
     | SAME field { $$ = SameConditionSemanticAction($2); }
     | DIFFERENT field { $$ = DifferentConditionSemanticAction($2); }
     | TIMESPAN comparison_operator expression { $$ = TimespanPatternConditionSemanticAction($2, $3); }
@@ -284,7 +312,19 @@ expression:
     | expression SUB expression { $$ = ArithmeticExpressionSemanticAction($1, $3, SUBTRACTION); }
     | factor { $$ = FactorExpressionSemanticAction($1); }
     | COUNT OPEN_PARENTHESIS comparison_expression CLOSE_PARENTHESIS {
-        $$ = CountExpressionSemanticAction($3);
+        $$ = AggregationExpressionSemanticAction($3, AGGREGATION_COUNT);
+    }
+    | SUM OPEN_PARENTHESIS comparison_expression CLOSE_PARENTHESIS {
+        $$ = AggregationExpressionSemanticAction($3, AGGREGATION_SUM);
+    }
+    | AVG OPEN_PARENTHESIS comparison_expression CLOSE_PARENTHESIS {
+        $$ = AggregationExpressionSemanticAction($3, AGGREGATION_AVG);
+    }
+    | MIN OPEN_PARENTHESIS comparison_expression CLOSE_PARENTHESIS {
+        $$ = AggregationExpressionSemanticAction($3, AGGREGATION_MIN);
+    }
+    | MAX OPEN_PARENTHESIS comparison_expression CLOSE_PARENTHESIS {
+        $$ = AggregationExpressionSemanticAction($3, AGGREGATION_MAX);
     }
     ;
 

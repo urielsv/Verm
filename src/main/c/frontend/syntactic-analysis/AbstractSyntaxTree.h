@@ -45,7 +45,8 @@ typedef enum ConditionType {
     COMPARISON = 0,
     LOGICAL_AND,
     LOGICAL_OR,
-    LOGICAL_NOT
+    LOGICAL_NOT,
+    PATTERN_CONDITION
 } ConditionType;
 
 typedef enum ExpressionType {
@@ -54,7 +55,11 @@ typedef enum ExpressionType {
     FACTOR,
     MULTIPLICATION,
     SUBTRACTION,
-    EXPRESSION_COUNT,
+    AGGREGATION_COUNT,
+    AGGREGATION_SUM,
+    AGGREGATION_AVG,
+    AGGREGATION_MIN,
+    AGGREGATION_MAX
 } ExpressionType;
 
 typedef enum FactorType {
@@ -123,7 +128,7 @@ struct Expression {
             Expression* leftExpression;  // Nombre que espera el generador
             Expression* rightExpression; // Nombre que espera el generador
         };
-        Condition* count; 
+        Condition* aggregation; 
     };
 };
 
@@ -140,20 +145,29 @@ typedef struct {
 typedef enum {
     PC_SAME = 6, 
     PC_DIFFERENT,
-    PC_COUNT,
+    PC_AGGREGATION, 
     PC_TIMESPAN
 } PatternConditionType;
+
+typedef enum {
+    AGG_COUNT,
+    AGG_SUM,
+    AGG_AVG,
+    AGG_MIN,
+    AGG_MAX
+} AggregationFunction;
 
 typedef struct {
     PatternConditionType type;
     union {
         struct { Field* field; } same;
         struct { Field* field; } different;
-        struct {
+       struct {
+        AggregationFunction func;
         Field* field;
         ComparisonOperator op;
-        Expression* value; 
-        } count;
+        Expression* value;
+        } aggregation;
         struct {
             ComparisonOperator op;
             Expression* value; 

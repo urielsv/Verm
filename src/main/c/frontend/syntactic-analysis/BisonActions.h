@@ -93,6 +93,8 @@ Factor* VariableFactorSemanticAction(char* name);
 VariableDeclaration* VariableDeclarationSemanticAction(char* identifier, Expression* value);
 Statement* VariableDeclarationStatementSemanticAction(VariableDeclaration* decl);
 
+Condition* AggregationPatternConditionSemanticAction(Field* field, ComparisonOperator op, Expression* value, ExpressionType aggType);
+Expression* AggregationExpressionSemanticAction(Condition* condition, ExpressionType aggType);
 
 /* utils */
 PatternCondition* convertConditionsToPatterns(Condition* cond); 
