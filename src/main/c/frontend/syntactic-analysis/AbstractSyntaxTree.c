@@ -109,27 +109,35 @@ void releaseStatement(Statement * statement) {
             free(statement->alert.message);
             break;
 
-        case DEFINE_STATEMENT:
-            free(statement->define.pattern_name);
-           for (int i = 0; i < statement->define.condition_count; i++) {
-    PatternCondition* pc = &statement->define.conditions[i];
-    switch (pc->type) {
-        case PC_SAME:
-            free(pc->same.field);
-            break;
-        case PC_DIFFERENT:
-            free(pc->different.field);
-            break;
-        case PC_COUNT:
-            free(pc->count.field);
-            break;
-        case PC_TIMESPAN:
-        
-            break;
+       case DEFINE_STATEMENT:
+    printf("[DEBUG][releaseStatement] Freeing DEFINE_STATEMENT...\n");
+    free(statement->define.pattern_name);
+    for (int i = 0; i < statement->define.condition_count; i++) {
+        PatternCondition* pc = &statement->define.conditions[i];
+        printf("[DEBUG][releaseStatement] Releasing PatternCondition[%d] (type=%d)\n", i, pc->type);
+        switch (pc->type) {
+            case PC_SAME:
+                printf("[DEBUG][releaseStatement] → Releasing SAME field @ %p\n", (void*)pc->same.field);
+                releaseField(pc->same.field);
+                break;
+            case PC_DIFFERENT:
+                printf("[DEBUG][releaseStatement] → Releasing DIFFERENT field @ %p\n", (void*)pc->different.field);
+                releaseField(pc->different.field);
+                break;
+            case PC_COUNT:
+                printf("[DEBUG][releaseStatement] → Releasing COUNT field @ %p and expr @ %p\n",
+                       (void*)pc->count.field, (void*)pc->count.value);
+                releaseField(pc->count.field);
+                releaseExpression(pc->count.value);
+                break;
+            case PC_TIMESPAN:
+                printf("[DEBUG][releaseStatement] → Releasing TIMESPAN expr @ %p\n", (void*)pc->timespan.value);
+                releaseExpression(pc->timespan.value);
+                break;
         }
     }
-            free(statement->define.conditions);
-            break;
+    free(statement->define.conditions);
+    break;
         case IMPORT_STATEMENT:
         case EXPORT_STATEMENT:
             free(statement->import_export.filename);
@@ -137,6 +145,10 @@ void releaseStatement(Statement * statement) {
                 free(statement->import_export.export_data);
             }
             break;
+        case VARIABLE_DECLARATION_STATEMENT:
+        releaseExpression(statement->variable_declaration.value);
+        free(statement->variable_declaration.identifier);
+        break;
     }
     free(statement);
 }
@@ -145,6 +157,8 @@ void releaseCondition(Condition * condition) {
     if (condition == NULL) {
         return;
     }
+
+        printf("[FREE] Condition @ %p (type=%d)\n", condition, condition->type);
 
 
     switch (condition->type) {
@@ -163,21 +177,24 @@ void releaseCondition(Condition * condition) {
             releaseCondition(condition->logical.left);
             break;
 
-        default:
+           default:
             if (condition->type >= PC_SAME && condition->type <= PC_TIMESPAN) {
                 switch (condition->pattern.type) {
                     case PC_SAME:
+                            releaseField(condition->pattern.same.field);
+                        break;
                     case PC_DIFFERENT:
-                        if (condition->pattern.same.field) {
-                            free(condition->pattern.same.field);
-                        }
+                            releaseField(condition->pattern.different.field);
                         break;
                     case PC_COUNT:
-                            if (condition->pattern.count.field) {
-                                free(condition->pattern.count.field);
-                            }
+                            releaseField(condition->pattern.count.field);
+                            releaseExpression(condition->pattern.count.value);
                         break;
+
                     case PC_TIMESPAN:
+                        if(condition->pattern.timespan.value != NULL) {
+                            releaseExpression(condition->pattern.timespan.value);
+                        }
                         break;
                 }
             } else {
@@ -189,8 +206,10 @@ void releaseCondition(Condition * condition) {
     free(condition);
 }
 
+
 void releaseField(Field * field) {
     if (field == NULL) return;
+    printf("[FREE] Field @ %p (name='%s')\n", field, field->name);
     if (field->protocol != NULL) {
         free(field->protocol);
     }
@@ -229,6 +248,9 @@ void releaseFactor(Factor * factor) {
                     releaseField(factor->field);
                 }
                 break;
+            case VARIABLE_REFERENCE:
+            free(factor->variable_name);
+            break;
         }
         free(factor);
     }
@@ -240,12 +262,6 @@ void releaseConstant(Constant * constant) {
         switch (constant->value.type) {
             case STRING_TYPE:
                 free(constant->value.string);
-                break;
-            case ADDRESS_TYPE_VALUE:
-                free(constant->value.address.value);
-                break;
-            case PACKET_TYPE_VALUE:
-                free(constant->value.packet.raw_data);
                 break;
             default:
                 break;

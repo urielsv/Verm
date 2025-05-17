@@ -1,0 +1,13 @@
+// Test that we can use an integer definition in the extract clause
+import from "capture.pcap";
+
+int responseCode = 500;
+int countThreshold = 10;
+
+extract {
+    ip.src_addr,
+    http.response_code
+}
+where http.response_code >= responseCode
+group by ip.src_addr
+having count(*) > countThreshold; 

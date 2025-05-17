@@ -1,0 +1,4 @@
+//define a variable and then use it
+int a = 5 + 10;
+alert when timespan < a
+send to "admin@example.com";

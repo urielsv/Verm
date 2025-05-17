@@ -46,27 +46,52 @@ int countConditions(Condition* cond) {
 }
 
 
+static void flattenConditions(Condition* cond, PatternCondition* out, int* index) {
+    if (!cond) return;
+
+    if (cond->type == LOGICAL_AND) {
+        flattenConditions(cond->logical.left, out, index);
+        flattenConditions(cond->logical.right, out, index);
+        printf("[DEBUG][convert] Freeing LOGICAL_AND node @ %p\n", (void*)cond);
+        free(cond);  // solo nodo, no recursivo
+    } else {
+        PatternCondition* pc = &out[(*index)++];
+        pc->type = cond->pattern.type;
+
+        switch (cond->pattern.type) {
+            case PC_SAME:
+                pc->same.field = cond->pattern.same.field;
+                break;
+            case PC_DIFFERENT:
+                pc->different.field = cond->pattern.different.field;
+                break;
+            case PC_COUNT:
+                pc->count.field = cond->pattern.count.field;
+                pc->count.op = cond->pattern.count.op;
+                pc->count.value = cond->pattern.count.value;
+                break;
+            case PC_TIMESPAN:
+                pc->timespan.op = cond->pattern.timespan.op;
+                pc->timespan.value = cond->pattern.timespan.value;
+                break;
+        }
+
+        printf("[DEBUG][convert] Flattened pattern type %d from Condition @ %p\n", pc->type, (void*)cond);
+        free(cond);  
+    }
+}
+
 PatternCondition* convertConditionsToPatterns(Condition* cond) {
     int count = countConditions(cond);
-    PatternCondition* patterns = malloc(count * sizeof(PatternCondition));
-
-    for (int i = 0; i < count; i++) {
-        if (cond == NULL) break;
-
-        if (cond->type >= PC_SAME && cond->type <= PC_TIMESPAN) {
-            patterns[i] = cond->pattern;
-            cond = NULL; 
-        } else if (cond->type == LOGICAL_AND) {
-            patterns[i] = cond->logical.left->pattern;
-            cond = cond->logical.right;
-        } else {
-            fprintf(stderr, "[convertConditionsToPatterns] Unexpected condition type %d\n", cond->type);
-            exit(1); 
-        }
-    }
-    releaseCondition(cond); 
+    printf("[DEBUG][convert] countConditions = %d\n", count);
+    PatternCondition* patterns = calloc(count, sizeof(PatternCondition));
+    int index = 0;
+    flattenConditions(cond, patterns, &index);
     return patterns;
 }
+
+
+
 
 
 /* ==================== FUNCIONES DE CONDICIONES ==================== */
@@ -77,8 +102,6 @@ Condition* SamePatternConditionSemanticAction(Field* field) {
     cond->type = PC_SAME;
     cond->pattern.type = PC_SAME;
     cond->pattern.same.field = field;
-     free(field->name);
-    free(field->protocol);
     return cond;
 }
 
@@ -88,22 +111,14 @@ Condition* DifferentPatternConditionSemanticAction(Field* field) {
     cond->type = PC_DIFFERENT;
     cond->pattern.type = PC_DIFFERENT;
     cond->pattern.same.field = field;
-    free(field->name);
-    free(field->protocol);
     return cond;
 }
 
 Condition* CountPatternConditionSemanticAction(Field* field, ComparisonOperator op, int value) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_COUNT;
-    cond->pattern.type = PC_COUNT;
-    cond->pattern.same.field = field;
-    cond->pattern.count.op = op;
-    cond->pattern.count.value = value;
-    free(field->name);
-    free(field->protocol);
-    return cond;
+    Constant* constant = IntegerConstantSemanticAction(value);
+    Factor* factor = ConstantFactorSemanticAction(constant);
+    Expression* expr = FactorExpressionSemanticAction(factor);
+    return CountPatternConditionExpressionSemanticAction(field, op, expr);
 }
 
 Condition* MultiplePatternConditionsSemanticAction(Condition* conditions, Condition* newCondition) {
@@ -143,13 +158,14 @@ Condition* FieldConditionSemanticAction(char* field1, char* field2) {
     return cond;
 }
 
-Condition* TimespanPatternConditionSemanticAction(ComparisonOperator op, int seconds) {
+
+Condition* TimespanPatternConditionSemanticAction(ComparisonOperator op, Expression* value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = PC_TIMESPAN;
     cond->pattern.type = PC_TIMESPAN;
     cond->pattern.timespan.op = op;
-    cond->pattern.timespan.seconds = seconds;
+    cond->pattern.timespan.value = value;
     return cond;
 }
 
@@ -165,22 +181,6 @@ Condition* ComparisonSemanticAction(Expression* left, Expression* right, Compari
 
 
 /* ==================== FUNCIONES DE FACTORES ==================== */
-
-Factor* AddressTypeFactorSemanticAction(char* address) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Constant* addrConst = AddressConstantSemanticAction(address, ADDR_IPv4);
-    return ConstantFactorSemanticAction(addrConst);
-}
-
-Factor* PacketTypeFactorSemanticAction(char* data) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Constant* pktConst = PacketConstantSemanticAction(data, strlen(data)+1);
-    return ConstantFactorSemanticAction(pktConst);
-}
-
-
-
-
 Constant* IntegerConstantSemanticAction(const int value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Constant* constant = malloc(sizeof(Constant));
@@ -212,24 +212,7 @@ Constant* TimestampConstantSemanticAction(time_t value) {
     return constant;
 }
 
-Constant* AddressConstantSemanticAction(char* address, AddressKind kind) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Constant* constant = malloc(sizeof(Constant));
-    constant->value.type = ADDRESS_TYPE_VALUE;
-    constant->value.address.kind = kind;
-    constant->value.address.value = strdup(address);
-    return constant;
-}
 
-Constant* PacketConstantSemanticAction(char* data, size_t length) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Constant* constant = malloc(sizeof(Constant));
-    constant->value.type = PACKET_TYPE_VALUE;
-    constant->value.packet.raw_data = malloc(length);
-    memcpy(constant->value.packet.raw_data, data, length);
-    constant->value.packet.length = length;
-    return constant;
-}
 
 /* ==================== EXPRESIONES Y FACTORES ==================== */
 
@@ -316,6 +299,7 @@ Program* MultiStatementProgramSemanticAction(CompilerState* state, Program* prog
 Field* FieldSemanticAction(char* name, char* protocol) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Field* field = calloc(1, sizeof(Field));
+    printf("[CREATE] Field @ %p (protocol='%s', name='%s')\n", field, protocol, name);
     field->name = name;
     field->protocol = protocol;
     return field;
@@ -386,26 +370,7 @@ Condition* DifferentConditionSemanticAction(Field* field) {
     return cond;
 }
 
-Condition* CountConditionSemanticAction(Field* field, ComparisonOperator op, int value) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_COUNT;
-    cond->pattern.type = PC_COUNT;
-    cond->pattern.count.field = field;
-    cond->pattern.count.op = op;
-    cond->pattern.count.value = value;
-    return cond;
-}
 
-Condition* TimespanConditionSemanticAction(ComparisonOperator op, int seconds) {
-    _logSyntacticAnalyzerAction(__FUNCTION__);
-    Condition* cond = calloc(1, sizeof(Condition));
-    cond->type = PC_TIMESPAN;
-    cond->pattern.type = PC_TIMESPAN;
-    cond->pattern.timespan.op = op;
-    cond->pattern.timespan.seconds = seconds;
-    return cond;
-}
 
 Condition* EmptyHavingClauseSemanticAction() {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -500,7 +465,7 @@ for (int i = 0; i < count; i++) {
             break;
         case PC_TIMESPAN:
             dst->timespan.op = src->timespan.op;
-            dst->timespan.seconds = src->timespan.seconds;
+            dst->timespan.value = src->timespan.value;
             break;
     }
 }    stmt->define.condition_count = count;
@@ -566,12 +531,51 @@ Field* createSimpleField(char* name, char* protocol) {
     Field* field = calloc(1, sizeof(Field));
     
     if(strcmp(name, "*") == 0) {
-        field->name = name;
+        field->name = strdup(name);
         field->protocol = NULL;
         return field;
     }
     field->name = name;
     field->protocol = NULL;
-    free(name);
+    //free(name);
     return field;
+}
+
+Factor* VariableFactorSemanticAction(char* name) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Factor* factor = calloc(1, sizeof(Factor));
+    factor->type = VARIABLE_REFERENCE;
+    factor->variable_name = name; 
+    return factor;
+}
+
+
+VariableDeclaration* VariableDeclarationSemanticAction(char* identifier, Expression* value) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    VariableDeclaration* decl = calloc(1, sizeof(VariableDeclaration));
+    decl->identifier = identifier;
+    decl->value = value; 
+    return decl;
+}
+
+
+Statement* VariableDeclarationStatementSemanticAction(VariableDeclaration* decl) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Statement* stmt = calloc(1, sizeof(Statement));
+    stmt->type = VARIABLE_DECLARATION_STATEMENT;
+    stmt->variable_declaration = *decl;
+    free(decl);
+    return stmt;
+}
+
+Condition* CountPatternConditionExpressionSemanticAction(Field* field, ComparisonOperator op, Expression* value) {
+    _logSyntacticAnalyzerAction(__FUNCTION__);
+    Condition* cond = calloc(1, sizeof(Condition));
+        printf("[CREATE] CountCondition @ %p (Field @ %p, Expression @ %p)\n", cond, field, value);
+    cond->type = PC_COUNT;
+    cond->pattern.type = PC_COUNT;
+    cond->pattern.count.field = field;
+    cond->pattern.count.op = op;
+    cond->pattern.count.value = value;
+    return cond;
 }

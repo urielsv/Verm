@@ -28,7 +28,6 @@ Program * ExpressionProgramSemanticAction(CompilerState * compilerState, Express
 Constant * StringConstantSemanticAction(char * value);
 Constant * BooleanConstantSemanticAction(bool value);
 Constant * TimestampConstantSemanticAction(time_t value);
-Constant * AddressConstantSemanticAction(char * address, AddressKind kind);
 Constant * PacketConstantSemanticAction(char * data, size_t length);
 
 /* Expressions and Factors */
@@ -50,8 +49,7 @@ Condition * ComparisonConditionSemanticAction(Expression * left, Expression * ri
 Condition * LogicalConditionSemanticAction(Condition * left, Condition * right, LogicalOperator op);
 Condition * SameConditionSemanticAction(Field * field);
 Condition * DifferentConditionSemanticAction(Field * field);
-Condition * CountConditionSemanticAction(Field * field, ComparisonOperator op, int value);
-Condition * TimespanConditionSemanticAction(ComparisonOperator op, int seconds);
+Condition* TimespanPatternConditionSemanticAction(ComparisonOperator op, Expression* value);
 Condition * EmptyHavingClauseSemanticAction();
 Condition * HavingClauseSemanticAction(Condition * condition);
 Condition * ParenthesizedConditionSemanticAction(Condition * condition);
@@ -72,7 +70,6 @@ Condition * SamePatternConditionSemanticAction(Field * field);
 Condition * DifferentPatternConditionSemanticAction(Field * field);
 Condition * CountPatternConditionSemanticAction(Field * field, ComparisonOperator op, int value);
 Condition * MultiplePatternConditionsSemanticAction(Condition * conditions, Condition * newCondition);
-Condition * TimespanPatternConditionSemanticAction(ComparisonOperator op, int seconds);
 Condition * ComparisonSemanticAction(Expression * left, Expression * right, ComparisonOperator op);
 
 
@@ -89,6 +86,12 @@ Statement * AlertStatementSemanticActionWrapper(Statement * stmt);
 Statement * GroupStatementSemanticActionWrapper(Statement * stmt);
 Statement * DefineStatementSemanticActionWrapper(Statement * stmt);
 Statement * ImportExportStatementSemanticActionWrapper(Statement * stmt);
+
+Condition* CountPatternConditionExpressionSemanticAction(Field* field, ComparisonOperator op, Expression* value);
+
+Factor* VariableFactorSemanticAction(char* name);
+VariableDeclaration* VariableDeclarationSemanticAction(char* identifier, Expression* value);
+Statement* VariableDeclarationStatementSemanticAction(VariableDeclaration* decl);
 
 
 /* utils */

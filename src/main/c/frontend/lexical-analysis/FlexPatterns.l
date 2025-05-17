@@ -15,6 +15,8 @@
 %x MULTILINE_COMMENT
 %x STRING_LITERAL
 
+%x VAR_IDENTIFIER
+
 /**
  * Reusable patterns.
  *
@@ -35,11 +37,8 @@ string          \"[^\"]*\"
 <MULTILINE_COMMENT>"*"      { IgnoredLexemeAction(createLexicalAnalyzerContext()); }
 "//".*                      { IgnoredLexemeAction(createLexicalAnalyzerContext()); }
 
-"PROTOCOL"                  { return KeywordLexemeAction(createLexicalAnalyzerContext(), PROTOCOL); }
-"HTTP"                      { return ProtocolLexemeAction(createLexicalAnalyzerContext(), PROTO_HTTP); }
-"TCP"                       { return ProtocolLexemeAction(createLexicalAnalyzerContext(), PROTO_TCP); }
-"UDP"                       { return ProtocolLexemeAction(createLexicalAnalyzerContext(), PROTO_UDP); }
-"DNS"                       { return ProtocolLexemeAction(createLexicalAnalyzerContext(), PROTO_DNS); }
+
+"int"   { BEGIN(VAR_IDENTIFIER); return TypeLexemeAction(createLexicalAnalyzerContext(), INT_TYPE); }
 
 "extract"                   { return KeywordLexemeAction(createLexicalAnalyzerContext(), EXTRACT); }
 "capture"                   { return KeywordLexemeAction(createLexicalAnalyzerContext(), CAPTURE); }
@@ -71,8 +70,6 @@ string          \"[^\"]*\"
 "else"                      { return KeywordLexemeAction(createLexicalAnalyzerContext(), ELSE); }
 "while"                     { return KeywordLexemeAction(createLexicalAnalyzerContext(), WHILE); }
 
-"packet"                    { return TypeLexemeAction(createLexicalAnalyzerContext(), PACKET_TYPE); }
-"address"                   { return TypeLexemeAction(createLexicalAnalyzerContext(), ADDRESS_TYPE); }
 
 "+"                         { return ArithmeticOperatorLexemeAction(createLexicalAnalyzerContext(), ADD); }
 "-"                         { return ArithmeticOperatorLexemeAction(createLexicalAnalyzerContext(), SUB); }
@@ -103,6 +100,11 @@ string          \"[^\"]*\"
 {whitespace}+               { IgnoredLexemeAction(createLexicalAnalyzerContext()); }
 "."                         { return DotLexemeAction(createLexicalAnalyzerContext(), DOT); }
 
+
+<VAR_IDENTIFIER>{identifier} {
+    BEGIN(INITIAL);
+    return IdentifierLexemeAction(createLexicalAnalyzerContext());
+}
 
 
 %%

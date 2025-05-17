@@ -102,6 +102,16 @@ ComputationResult computeConstant(Constant * constant) {
 	return computationResult;
 }
 
+
+ComputationResult computeStatement(Statement * statement) {
+	//todo_ stage 3 
+	ComputationResult computationResult = {
+		.succeed = true,
+		.value = 0
+	};
+	return computationResult;
+}
+
 ComputationResult computeExpression(Expression * expression) {
 	switch (expression->type) {
 		case ADDITION:

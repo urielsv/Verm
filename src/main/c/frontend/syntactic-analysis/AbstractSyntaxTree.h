@@ -60,7 +60,8 @@ typedef enum ExpressionType {
 typedef enum FactorType {
     CONSTANT,
     EXPRESSION,
-    FIELD
+    FIELD,
+    VARIABLE_REFERENCE
 } FactorType;
 
 /**
@@ -74,21 +75,16 @@ typedef enum StatementType {
     DEFINE_STATEMENT,
     IMPORT_STATEMENT,
     EXPORT_STATEMENT,
+    VARIABLE_DECLARATION_STATEMENT
 } StatementType;
 
 typedef enum ValueType {
     INTEGER_TYPE,
     STRING_TYPE,
     BOOLEAN_TYPE,
-    TIMESTAMP_TYPE,
-    ADDRESS_TYPE_VALUE, 
-    PACKET_TYPE_VALUE    
+    TIMESTAMP_TYPE
 } ValueType;
-typedef enum AddressKind {
-    ADDR_IPv4,
-    ADDR_IPv6,
-    ADDR_MAC
-} AddressKind;
+
 
 typedef struct {
     ValueType type;
@@ -97,16 +93,13 @@ typedef struct {
         char* string;
         bool boolean;
         time_t timestamp;
-        struct {
-            AddressKind kind;
-            char* value;
-        } address;
-        struct {
-            char* raw_data;
-            size_t length;
-        } packet;
     };
 } Value;
+
+typedef struct {
+    char* identifier;
+    Expression* value;
+} VariableDeclaration;
 
 struct Constant {
         Value value;   
@@ -117,6 +110,7 @@ struct Factor {
         Constant* constant;
         Expression* expression;
         Field* field;
+        char* variable_name;
     };
     FactorType type;
 };
@@ -156,13 +150,13 @@ typedef struct {
         struct { Field* field; } same;
         struct { Field* field; } different;
         struct {
-            Field* field;
-            ComparisonOperator op;
-            int value;
+        Field* field;
+        ComparisonOperator op;
+        Expression* value; 
         } count;
         struct {
             ComparisonOperator op;
-            int seconds;
+            Expression* value; 
         } timespan;
     };
 } PatternCondition;
@@ -192,18 +186,6 @@ typedef struct {
     Condition* condition;
 } FilterStatement;
 
-typedef struct Statement {
-    StatementType type;
-    union {
-        CaptureStatement capture;
-        ExtractStatement extract;
-        FilterStatement filter;
-        AlertStatement alert;
-        DefineStatement define;
-        ImportExportStatement import_export;
-    };
-    GroupStatement group;  
-} Statement;
 
 typedef struct Field {
     char* protocol;  
@@ -232,6 +214,20 @@ struct Condition {
 		PatternCondition pattern;
     };
 };
+
+typedef struct Statement {
+    StatementType type;
+    union {
+        CaptureStatement capture;
+        ExtractStatement extract;
+        FilterStatement filter;
+        AlertStatement alert;
+        DefineStatement define;
+        ImportExportStatement import_export;
+        VariableDeclaration variable_declaration;
+    };
+    GroupStatement group;  
+} Statement;
 
 typedef struct StatementList {
     Statement* statement;

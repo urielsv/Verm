@@ -50,4 +50,9 @@ ComputationResult computeExpression(Expression * expression);
  */
 ComputationResult computeFactor(Factor * factor);
 
+/**
+* Computes the final value of a statement.
+*/
+ComputationResult computeStatement(Statement * statement);
+
 #endif

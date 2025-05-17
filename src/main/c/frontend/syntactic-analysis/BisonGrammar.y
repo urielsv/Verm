@@ -23,6 +23,7 @@
     Condition* condition;
     GroupStatement groupStatement;
     ComparisonOperator comparisonOperator;
+    VariableDeclaration* variableDeclaration;
 }
 
 /** Destructors */
@@ -40,8 +41,7 @@
 %token <string> IDENTIFIER STRING
 
 
-/** Protocol tokens */
-%token <token> PROTOCOL PROTO_HTTP PROTO_TCP PROTO_UDP PROTO_DNS
+%token <token> INT_TYPE
 
 /** Data operation tokens */
 %token <token> EXTRACT CAPTURE FILTER GROUP COUNT WHERE HAVING ORDER BY FROM 
@@ -92,7 +92,7 @@
 %type <groupStatement> group_clause
 %type <condition> count_pattern
 %type <comparisonOperator> comparison_operator
-
+%type <variableDeclaration> variable_declaration
 
 /** Precedence and associativity */
 %left COMMA
@@ -119,6 +119,7 @@ program:
 statement:
     capture_statement { $$ = CaptureStatementSemanticActionWrapper($1); }
     | import_statement { $$ = ImportExportStatementSemanticActionWrapper($1); }
+    | variable_declaration { $$ = VariableDeclarationStatementSemanticAction($1); }
     | extract_statement { $$ = ExtractStatementSemanticActionWrapper($1); }
     | filter_statement { $$ = FilterStatementSemanticActionWrapper($1); }
     | alert_statement { $$ = AlertStatementSemanticActionWrapper($1); }
@@ -132,6 +133,11 @@ ALERT WHEN condition SEND TO STRING SEMICOLON {
 }
 ;
 
+variable_declaration:
+    INT_TYPE IDENTIFIER ASSIGN expression SEMICOLON {
+        $$ = VariableDeclarationSemanticAction($2, $4);
+    }
+    ;
 
 comparison_operator:
       EQUALS        { $$ = EQUALS_OP; }
@@ -144,18 +150,16 @@ comparison_operator:
 
 
 count_pattern:
-    COUNT OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator INTEGER {
-        $$ = CountPatternConditionSemanticAction($3, $5, $6);
+    COUNT OPEN_PARENTHESIS field CLOSE_PARENTHESIS comparison_operator expression {
+        $$ = CountPatternConditionExpressionSemanticAction($3, $5, $6);
     }
-;
-;
-
+    ;
 
 define_statement:
     DEFINE IDENTIFIER OPEN_BRACE pattern_conditions CLOSE_BRACE SEMICOLON {
-        PatternCondition* patterns = convertConditionsToPatterns($4);
-        $$ = DefineStatementSemanticAction($2, patterns, countConditions($4));
-        releaseCondition($4);
+        int condition_count = countConditions($4);
+        PatternCondition* patterns = convertConditionsToPatterns($4); 
+        $$ = DefineStatementSemanticAction($2, patterns, condition_count);
         free(patterns);
     }
     ;
@@ -165,10 +169,10 @@ pattern_condition:
     | DIFFERENT field { $$ = DifferentPatternConditionSemanticAction($2); }
     | comparison_expression { $$ = $1; }  
     | count_pattern { $$ = $1; }
-    | TIMESPAN EQUALS INTEGER { $$ = TimespanConditionSemanticAction(EQUALS_OP, $3); }
-    | TIMESPAN NOT_EQUALS INTEGER { $$ = TimespanConditionSemanticAction(NOT_EQUALS_OP, $3); }
-    | TIMESPAN LESS_THAN INTEGER { $$ = TimespanConditionSemanticAction(LESS_THAN_OP, $3); }
-    | TIMESPAN GREATER_THAN INTEGER { $$ = TimespanConditionSemanticAction(GREATER_THAN_OP, $3); }
+    | TIMESPAN EQUALS expression { $$ = TimespanPatternConditionSemanticAction(EQUALS_OP, $3); }
+    | TIMESPAN NOT_EQUALS expression { $$ = TimespanPatternConditionSemanticAction(NOT_EQUALS_OP, $3); }
+    | TIMESPAN LESS_THAN expression { $$ = TimespanPatternConditionSemanticAction(LESS_THAN_OP, $3); }
+    | TIMESPAN GREATER_THAN expression { $$ = TimespanPatternConditionSemanticAction(GREATER_THAN_OP, $3); }
     ;
 
 pattern_conditions:
@@ -202,24 +206,24 @@ condition:
     comparison_expression { $$ = $1; }
     | logical_expression { $$ = $1; }
     | OPEN_PARENTHESIS condition CLOSE_PARENTHESIS { $$ = ParenthesizedConditionSemanticAction($2); }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS GREATER_THAN INTEGER {
-        $$ = CountConditionSemanticAction(createSimpleField("*", NULL), GREATER_THAN_OP, $6);
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS GREATER_THAN expression {
+        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), GREATER_THAN_OP, $6);
     }
-        | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS EQUALS INTEGER {
-        $$ = CountConditionSemanticAction(createSimpleField("*", NULL), EQUALS_OP, $6);
+        | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS EQUALS expression {
+        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), EQUALS_OP, $6);
     }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS NOT_EQUALS INTEGER {
-        $$ = CountConditionSemanticAction(createSimpleField("*", NULL), NOT_EQUALS_OP, $6);
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS NOT_EQUALS expression {
+        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), NOT_EQUALS_OP, $6);
     }
-    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS LESS_THAN INTEGER {
-        $$ = CountConditionSemanticAction(createSimpleField("*", NULL), LESS_THAN_OP, $6);
+    | COUNT OPEN_PARENTHESIS MUL CLOSE_PARENTHESIS LESS_THAN expression {
+        $$ = CountPatternConditionExpressionSemanticAction(createSimpleField("*", NULL), LESS_THAN_OP, $6);
     }
     | SAME field { $$ = SameConditionSemanticAction($2); }
     | DIFFERENT field { $$ = DifferentConditionSemanticAction($2); }
-    | TIMESPAN EQUALS INTEGER { $$ = TimespanPatternConditionSemanticAction(EQUALS_OP, $3); }
-    | TIMESPAN NOT_EQUALS INTEGER { $$ = TimespanPatternConditionSemanticAction(NOT_EQUALS_OP, $3); }
-    | TIMESPAN LESS_THAN INTEGER { $$ = TimespanPatternConditionSemanticAction(LESS_THAN_OP, $3); }
-    | TIMESPAN GREATER_THAN INTEGER { $$ = TimespanPatternConditionSemanticAction(GREATER_THAN_OP, $3); }
+    | TIMESPAN EQUALS expression { $$ = TimespanPatternConditionSemanticAction(EQUALS_OP, $3); }
+    | TIMESPAN NOT_EQUALS expression { $$ = TimespanPatternConditionSemanticAction(NOT_EQUALS_OP, $3); }
+    | TIMESPAN LESS_THAN expression { $$ = TimespanPatternConditionSemanticAction(LESS_THAN_OP, $3); }
+    | TIMESPAN GREATER_THAN expression { $$ = TimespanPatternConditionSemanticAction(GREATER_THAN_OP, $3); }
     ;
 
 capture_statement: 
@@ -308,16 +312,13 @@ expression:
 factor: 
     OPEN_PARENTHESIS expression CLOSE_PARENTHESIS { $$ = ExpressionFactorSemanticAction($2); }
     | constant { $$ = ConstantFactorSemanticAction($1); }
+    | IDENTIFIER { 
+        $$ = VariableFactorSemanticAction($1); 
+    }
     | IDENTIFIER DOT IDENTIFIER { 
         Field* f = FieldSemanticAction($1, $3); 
         $$ = FieldFactorSemanticAction(f); 
     }
-    | IDENTIFIER { 
-        Field* f = FieldSemanticAction($1, NULL); 
-        $$ = FieldFactorSemanticAction(f); 
-    }
-    | ADDRESS_TYPE STRING { $$ = AddressTypeFactorSemanticAction($2); }
-    | PACKET_TYPE STRING { $$ = PacketTypeFactorSemanticAction($2); }
     ;
 
 constant: 
