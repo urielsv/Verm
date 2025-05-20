@@ -91,11 +91,6 @@ PatternCondition* convertConditionsToPatterns(Condition* cond) {
 }
 
 
-
-
-
-/* ==================== FUNCIONES DE CONDICIONES ==================== */
-
 Condition* SamePatternConditionSemanticAction(Field* field) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Condition* cond = calloc(1, sizeof(Condition));
@@ -180,7 +175,6 @@ Condition* ComparisonSemanticAction(Expression* left, Expression* right, Compari
 }
 
 
-/* ==================== FUNCIONES DE FACTORES ==================== */
 Constant* IntegerConstantSemanticAction(const int value) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Constant* constant = malloc(sizeof(Constant));
@@ -212,9 +206,6 @@ Constant* TimestampConstantSemanticAction(time_t value) {
     return constant;
 }
 
-
-
-/* ==================== EXPRESIONES Y FACTORES ==================== */
 
 Expression* ArithmeticExpressionSemanticAction(Expression* left, Expression* right, ExpressionType type) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -257,12 +248,10 @@ Factor* FieldFactorSemanticAction(Field* field) {
     return factor;
 }
 
-/* ==================== PROGRAMAS ==================== */
 
 Program* StatementProgramSemanticAction(CompilerState* state, Statement* statement) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Program* program = calloc(1, sizeof(Program));
-    program->type = PROGRAM_STATEMENTS;
     StatementList* list = calloc(1, sizeof(StatementList));
     list->statement = statement;
     list->next = NULL;
@@ -294,7 +283,6 @@ Program* MultiStatementProgramSemanticAction(CompilerState* state, Program* prog
     return program;
 }
 
-/* ==================== CAMPOS ==================== */
 
 Field* FieldSemanticAction(char* name, char* protocol) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -330,7 +318,6 @@ FieldList* appendToFieldList(FieldList* list, Field* newField) {
     return list;
 }
 
-/* ==================== CONDICIONES ==================== */
 
 Condition* ComparisonConditionSemanticAction(Expression* left, Expression* right, ComparisonOperator op) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -382,7 +369,6 @@ Condition* HavingClauseSemanticAction(Condition* condition) {
     return condition;
 }
 
-/* ==================== STATEMENTS ==================== */
 
 Statement* CaptureStatementSemanticAction(char* source, Condition* condition) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
@@ -414,7 +400,7 @@ Condition* ExpressionConditionSemanticAction(Expression* expression) {
     Condition* cond = calloc(1, sizeof(Condition));
     cond->type = COMPARISON;
     cond->comparison.left = expression;
-    cond->comparison.right = NULL; // Podés usar esto para distinguir que es una expr directa
+    cond->comparison.right = NULL; 
     return cond;
 }
 
@@ -488,7 +474,6 @@ Statement* ExportStatementSemanticAction(char* data, char* filename) {
     return stmt;
 }
 
-/* ==================== WRAPPERS ==================== */
 
 Statement* CaptureStatementSemanticActionWrapper(Statement* stmt) {
     _logSyntacticAnalyzerAction(__FUNCTION__);

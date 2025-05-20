@@ -102,6 +102,15 @@ ComputationResult computeConstant(Constant * constant) {
 	return computationResult;
 }
 
+ComputationResult computeStatementList(StatementList * statementList){
+	//todo stage 3
+	ComputationResult computationResult = {
+		.succeed = true,
+		.value = 0
+	};
+	return computationResult;
+}
+
 
 ComputationResult computeStatement(Statement * statement) {
 	//todo_ stage 3 

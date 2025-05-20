@@ -55,4 +55,9 @@ ComputationResult computeFactor(Factor * factor);
 */
 ComputationResult computeStatement(Statement * statement);
 
+/**
+* Computes the final value of a list of statements.
+*/
+ComputationResult computeStatementList(StatementList * statementList);
+
 #endif

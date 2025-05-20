@@ -54,11 +54,9 @@
 %token <token> SAME DIFFERENT
 
 /** Definition tokens */
-%token <token> DEFINE IMPORT EXPORT TABLE TIMESPAN 
+%token <token> DEFINE IMPORT EXPORT TIMESPAN 
 %token <token> MATCHES
 
-/** Control flow tokens */
-%token <token> IF ELSE WHILE
 
 /** Data type tokens */
 %token <token> PACKET_TYPE ADDRESS_TYPE BOOLEAN TIMESTAMP

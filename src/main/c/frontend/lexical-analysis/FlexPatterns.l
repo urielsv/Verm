@@ -67,12 +67,7 @@ string          \"[^\"]*\"
 "matches"                   { return KeywordLexemeAction(createLexicalAnalyzerContext(), MATCHES); }
 "import"                    { return KeywordLexemeAction(createLexicalAnalyzerContext(), IMPORT); }
 "export"                    { return KeywordLexemeAction(createLexicalAnalyzerContext(), EXPORT); }
-"table"                     { return KeywordLexemeAction(createLexicalAnalyzerContext(), TABLE); }
 "timespan"                  { return KeywordLexemeAction(createLexicalAnalyzerContext(), TIMESPAN); }
-
-"if"                        { return KeywordLexemeAction(createLexicalAnalyzerContext(), IF); }
-"else"                      { return KeywordLexemeAction(createLexicalAnalyzerContext(), ELSE); }
-"while"                     { return KeywordLexemeAction(createLexicalAnalyzerContext(), WHILE); }
 
 
 "+"                         { return ArithmeticOperatorLexemeAction(createLexicalAnalyzerContext(), ADD); }
