@@ -1,0 +1,16 @@
+capture from "test.pcap" where tcp.dst_port == 80;
+
+extract {
+    timestamp,
+    ip.src_addr as client_ip,
+    tcp.dst_port as port,
+    http.response_code as status
+};
+
+filter status >= 400;
+
+group by client_ip;
+
+count errors;
+
+export to "http_errors.json"; 

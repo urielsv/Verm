@@ -1,0 +1,14 @@
+capture from "test.pcap";
+
+extract {
+    timestamp,
+    ip.src_addr as client_ip
+};
+
+filter client_ip + 1;  # Invalid: cannot add integer to IP address
+
+group by client_ip;
+
+count errors;
+
+export to "errors.json"; 

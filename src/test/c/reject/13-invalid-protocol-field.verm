@@ -1,0 +1,15 @@
+capture from "test.pcap";
+
+extract {
+    timestamp,
+    ip.src_addr as client_ip,
+    tcp.invalid_field as field  # Invalid: field doesn't exist in TCP protocol
+};
+
+filter field > 0;
+
+group by client_ip;
+
+count errors;
+
+export to "errors.json"; 
