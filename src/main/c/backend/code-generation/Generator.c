@@ -18,7 +18,7 @@ void shutdownGeneratorModule() {
 
 /** PRIVATE FUNCTIONS */
 
-static const char _expressionTypeToCharacter(const ExpressionType type);
+static char _expressionTypeToCharacter(const ExpressionType type);
 static void _generateConstant(const unsigned int indentationLevel, Constant * constant);
 static void _generateEpilogue(const int value);
 static void _generateExpression(const unsigned int indentationLevel, Expression * expression);
@@ -32,7 +32,7 @@ static void _output(const unsigned int indentationLevel, const char * const form
  * Converts and expression type to the proper character of the operation
  * involved, or returns '\0' if that's not possible.
  */
-static const char _expressionTypeToCharacter(const ExpressionType type) {
+static char _expressionTypeToCharacter(const ExpressionType type) {
 	switch (type) {
 		case ADDITION: return '+';
 		case DIVISION: return '/';
