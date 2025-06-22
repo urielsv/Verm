@@ -21,3 +21,13 @@
 BisonParser.c
 BisonParser.h
 FlexScanner.c
+
+# CMake generated files
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles/
+Makefile
+*.cmake
+install_manifest.txt
+install_manifest_*.txt
+Compiler
