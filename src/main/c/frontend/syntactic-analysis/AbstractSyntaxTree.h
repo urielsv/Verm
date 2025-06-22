@@ -201,16 +201,16 @@ typedef struct {
 } FilterStatement;
 
 
-typedef struct Field {
+struct Field {
     char* protocol;  
     char* name;
 
-} Field;
+};
 
-typedef struct FieldList {
+struct FieldList {
     Field* field;
     struct FieldList* next;
-} FieldList;
+};
 
 struct Condition {
     ConditionType type;
@@ -229,7 +229,7 @@ struct Condition {
     };
 };
 
-typedef struct Statement {
+struct Statement {
     StatementType type;
     union {
         CaptureStatement capture;
@@ -241,7 +241,7 @@ typedef struct Statement {
         VariableDeclaration variable_declaration;
     };
     GroupStatement group;  
-} Statement;
+};
 
 typedef struct StatementList {
     Statement* statement;
@@ -253,13 +253,13 @@ typedef enum {
     PROGRAM_EXPRESSION
 } ProgramType;
 
-typedef struct Program {
+struct Program {
     ProgramType type;
     union {
         StatementList* statements;
         Expression* expression;
     };
-} Program;
+};
 
 /**
  * Node recursive destructors.

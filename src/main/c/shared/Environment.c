@@ -2,7 +2,7 @@
 
 /* PUBLIC FUNCTIONS */
 
-const boolean getBooleanOrDefault(const char * name, const boolean defaultValue) {
+boolean getBooleanOrDefault(const char * name, const boolean defaultValue) {
 	const char * value = getStringOrDefault(name, NULL);
 	if (value == NULL) {
 		return defaultValue;
