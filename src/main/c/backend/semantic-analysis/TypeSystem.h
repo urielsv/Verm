@@ -49,10 +49,31 @@ int check_type_compatibility(VermType left, VermType right, OperatorType op);
 VermType infer_expression_type(Expression* expr);
 
 /**
+ * @brief Infers the type of a factor
+ * @param factor Factor node to analyze
+ * @return Inferred type of the factor
+ */
+VermType infer_factor_type(Factor* factor);
+
+/**
+ * @brief Infers the type of a field
+ * @param field Field node to analyze
+ * @return Inferred type of the field
+ */
+VermType infer_field_type(Field* field);
+
+/**
  * @brief Gets a string representation of a type
  * @param type The type to convert
  * @return String representation of the type
  */
 const char* type_to_string(VermType type);
+
+/**
+ * @brief Gets a string representation of an operator
+ * @param op The operator to convert
+ * @return String representation of the operator
+ */
+const char* operator_to_string(OperatorType op);
 
 #endif // VERM_TYPE_SYSTEM_H 
