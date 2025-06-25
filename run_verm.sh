@@ -27,8 +27,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Ejecutar el compilador con el archivo Verm por stdin
-./Compiler < "$VERM_FILE"
+# Ejecutar el compilador con el archivo Verm como argumento
+./Compiler "$VERM_FILE"
 
 if [ $? -eq 0 ]; then
     echo "✅ Análisis completado exitosamente"

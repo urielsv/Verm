@@ -122,4 +122,21 @@ int html_add_alert(const char* title, const char* message, const char* severity)
  */
 int html_close_dashboard();
 
+/**
+ * @brief Add a query section
+ * @param dsl_query DSL query
+ * @return 0 if successful, non-zero otherwise
+ */
+int html_add_query_section(const char* dsl_query);
+
+/**
+ * @brief Add a simple table
+ * @param headers Array of column headers
+ * @param header_count Number of headers
+ * @param rows Array of row arrays
+ * @param row_count Number of rows
+ * @return 0 if successful, non-zero otherwise
+ */
+int html_add_simple_table(const char** headers, int header_count, const char*** rows, int row_count);
+
 #endif // VERM_HTML_OUTPUT_H 

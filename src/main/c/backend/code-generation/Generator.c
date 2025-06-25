@@ -5,13 +5,13 @@
 #include "../../backend/domain-specific/Calculator.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /* MODULE INTERNAL STATE */
 
 const char _indentationCharacter = ' ';
 const char _indentationSize = 4;
 static Logger * _logger = NULL;
-static FILE* _htmlFile = NULL;
 static int _packetCount = 0;
 static int _httpErrors = 0;
 static int _tcpConnections = 0;
@@ -33,24 +33,37 @@ typedef struct PacketInfo {
 	int protocol; // 0: TCP, 1: UDP, 2: HTTP
 	int http_status;
 	char http_method[16];
+	int http_response_code;
+	double timestamp;
 	struct PacketInfo* next;
 } PacketInfo;
 
 static PacketInfo* packet_list_head = NULL;
 static PacketInfo* packet_list_tail = NULL;
 
+// Variables globales para el procesamiento de queries
+static char* current_pcap_file = NULL;
+static char* current_filter = NULL;
+static FieldList* current_extract_fields = NULL;
+static Condition* current_where_condition = NULL;
+static FieldList* current_group_fields = NULL;
+static Condition* current_having_condition = NULL;
+static Expression* current_aggregation = NULL;
+
 void initializeGeneratorModule() {
 	_logger = createLogger("Generator");
 }
+
+// Forward declarations
+static void free_packet_list(void);
+static void add_packet_info(PacketInfo* info);
 
 void shutdownGeneratorModule() {
 	if (_logger != NULL) {
 		destroyLogger(_logger);
 	}
-	if (_htmlFile != NULL) {
-		fclose(_htmlFile);
-		_htmlFile = NULL;
-	}
+	// Limpiar lista de paquetes
+	free_packet_list();
 }
 
 /** PRIVATE FUNCTIONS */
@@ -69,6 +82,29 @@ static void _processGroupStatement(GroupStatement * group);
 static void _processAggregation(Expression * expression);
 static char * _indentation(const unsigned int level);
 static void _output(const unsigned int indentationLevel, const char * const format, ...);
+static bool find_capture_or_import(Program* program, CaptureConfig* config);
+static void process_import_statement(ImportExportStatement* import);
+static void process_variable_declaration(VariableDeclaration* var_decl);
+static bool evaluate_condition(Condition* condition, PacketInfo* packet);
+static bool evaluate_expression(Expression* expr, PacketInfo* packet, double* result);
+static bool evaluate_factor(Factor* factor, PacketInfo* packet, double* result);
+static bool evaluate_field(Field* field, PacketInfo* packet, double* result);
+static void process_group_by_results(void);
+
+// Helper to read DSL file contents
+static char* read_dsl_file(const char* filename) {
+	FILE* f = fopen(filename, "r");
+	if (!f) return NULL;
+	fseek(f, 0, SEEK_END);
+	long len = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	char* buf = (char*)malloc(len + 1);
+	if (!buf) { fclose(f); return NULL; }
+	fread(buf, 1, len, f);
+	buf[len] = '\0';
+	fclose(f);
+	return buf;
+}
 
 // Función para agregar un paquete a la lista
 static void add_packet_info(PacketInfo* info) {
@@ -84,35 +120,108 @@ static void add_packet_info(PacketInfo* info) {
 
 // Handler real para procesar paquetes y actualizar métricas y lista
 static void real_packet_handler(u_char* user, const struct pcap_pkthdr* header, const u_char* packet) {
+	logDebugging(_logger, "Entered real_packet_handler");
+	(void)user;
+	
+	if (!header || !packet) {
+		logError(_logger, "real_packet_handler: header or packet is NULL");
+		return;
+	}
+	
 	PacketInfo* info = (PacketInfo*)calloc(1, sizeof(PacketInfo));
+	if (!info) {
+		logError(_logger, "Failed to allocate PacketInfo");
+		return;
+	}
+	
+	// Initialize all fields to safe defaults
+	memset(info->src_ip, 0, sizeof(info->src_ip));
+	memset(info->dst_ip, 0, sizeof(info->dst_ip));
+	info->src_port = 0;
+	info->dst_port = 0;
+	info->protocol = -1;
+	info->http_status = 0;
+	memset(info->http_method, 0, sizeof(info->http_method));
+	info->http_response_code = 0;
+	info->timestamp = 0.0;
+	info->next = NULL;
+	
+	// Extraer timestamp
+	info->timestamp = (double)header->ts.tv_sec + (double)header->ts.tv_usec / 1000000.0;
+	logDebugging(_logger, "Extracted timestamp: %f", info->timestamp);
+	
 	// Extraer campos IP
-	extract_ip_src_addr(packet, info->src_ip);
-	extract_ip_dst_addr(packet, info->dst_ip);
+	if (extract_ip_src_addr(packet, info->src_ip) != 0) {
+		logWarning(_logger, "Failed to extract IP source address");
+		strcpy(info->src_ip, "0.0.0.0");
+	}
+	if (extract_ip_dst_addr(packet, info->dst_ip) != 0) {
+		logWarning(_logger, "Failed to extract IP destination address");
+		strcpy(info->dst_ip, "0.0.0.0");
+	}
+	logDebugging(_logger, "Extracted src_ip: %s, dst_ip: %s", info->src_ip, info->dst_ip);
+	
 	// TCP
 	if (is_tcp_packet(packet)) {
-		extract_tcp_src_port(packet, &info->src_port);
-		extract_tcp_dst_port(packet, &info->dst_port);
+		if (extract_tcp_src_port(packet, &info->src_port) != 0) {
+			logWarning(_logger, "Failed to extract TCP source port");
+			info->src_port = 0;
+		}
+		if (extract_tcp_dst_port(packet, &info->dst_port) != 0) {
+			logWarning(_logger, "Failed to extract TCP destination port");
+			info->dst_port = 0;
+		}
 		info->protocol = 0;
 		_tcpConnections++;
+		logDebugging(_logger, "TCP packet: src_port=%d, dst_port=%d", info->src_port, info->dst_port);
 	}
 	// UDP
 	else if (is_udp_packet(packet)) {
-		extract_udp_src_port(packet, &info->src_port);
-		extract_udp_dst_port(packet, &info->dst_port);
+		if (extract_udp_src_port(packet, &info->src_port) != 0) {
+			logWarning(_logger, "Failed to extract UDP source port");
+			info->src_port = 0;
+		}
+		if (extract_udp_dst_port(packet, &info->dst_port) != 0) {
+			logWarning(_logger, "Failed to extract UDP destination port");
+			info->dst_port = 0;
+		}
 		info->protocol = 1;
 		_udpPackets++;
+		logDebugging(_logger, "UDP packet: src_port=%d, dst_port=%d", info->src_port, info->dst_port);
 	}
+	
 	// HTTP
 	if (is_http_packet(packet)) {
-		extract_http_status_code(packet, &info->http_status);
-		extract_http_method(packet, info->http_method);
+		if (extract_http_status_code(packet, &info->http_status) != 0) {
+			logWarning(_logger, "Failed to extract HTTP status code");
+			info->http_status = 0;
+		}
+		if (extract_http_method(packet, info->http_method) != 0) {
+			logWarning(_logger, "Failed to extract HTTP method");
+			strcpy(info->http_method, "UNKNOWN");
+		}
 		info->protocol = 2;
+		info->http_response_code = info->http_status;
 		if (info->http_status >= 400) {
 			_httpErrors++;
 		}
+		logDebugging(_logger, "HTTP packet: status=%d, method=%s", info->http_status, info->http_method);
 	}
+	
 	_packetCount++;
+	logDebugging(_logger, "Packet processed. _packetCount=%d", _packetCount);
+	
+	// Aplicar filtro WHERE si existe
+	if (current_where_condition) {
+		if (!evaluate_condition(current_where_condition, info)) {
+			logDebugging(_logger, "Packet did not match WHERE condition");
+			free(info);
+			return;
+		}
+	}
+	
 	add_packet_info(info);
+	logDebugging(_logger, "Packet added to list");
 }
 
 // Limpia la lista de paquetes
@@ -127,40 +236,287 @@ static void free_packet_list() {
 	packet_list_tail = NULL;
 }
 
-// Ejemplo simple de agrupamiento por src_ip y conteo de errores HTTP
-static void group_and_count_errors_by_src_ip(FILE* out) {
-	typedef struct Group {
-		char src_ip[64];
-		int error_count;
-		struct Group* next;
-	} Group;
-	Group* groups = NULL;
-	for (PacketInfo* p = packet_list_head; p; p = p->next) {
-		if (p->http_status >= 500) {
-			Group* g = groups;
-			while (g && strcmp(g->src_ip, p->src_ip) != 0) g = g->next;
-			if (!g) {
-				g = (Group*)calloc(1, sizeof(Group));
-				strcpy(g->src_ip, p->src_ip);
-				g->error_count = 1;
-				g->next = groups;
-				groups = g;
-			} else {
-				g->error_count++;
+// Busca declaraciones de import o capture en el programa
+static bool find_capture_or_import(Program* program, CaptureConfig* config) {
+	logDebugging(_logger, "find_capture_or_import: entering function");
+	
+	if (!program || !config) {
+		logError(_logger, "find_capture_or_import: program o config es NULL");
+		return false;
+	}
+	
+	logDebugging(_logger, "find_capture_or_import: program=%p, config=%p", program, config);
+	logDebugging(_logger, "find_capture_or_import: program->statements=%p", program->statements);
+	
+	StatementList* current = program->statements;
+	logDebugging(_logger, "find_capture_or_import: current=%p", current);
+	
+	while (current) {
+		logDebugging(_logger, "find_capture_or_import: processing statement list item, current=%p", current);
+		
+		if (current->statement) {
+			logDebugging(_logger, "find_capture_or_import: statement=%p, type=%d", current->statement, current->statement->type);
+			
+			if (current->statement->type == IMPORT_STATEMENT) {
+				logDebugging(_logger, "find_capture_or_import: found IMPORT_STATEMENT");
+				if (current->statement->import_export.filename) {
+					logInformation(_logger, "find_capture_or_import: found import statement for %s", 
+						current->statement->import_export.filename);
+					strncpy(config->filename, current->statement->import_export.filename, sizeof(config->filename) - 1);
+					config->filename[sizeof(config->filename) - 1] = '\0'; // Ensure null termination
+					config->is_import = 1;
+					logDebugging(_logger, "find_capture_or_import: returning true for import");
+					return true;
+				} else {
+					logError(_logger, "find_capture_or_import: import statement has NULL filename");
+				}
+			} else if (current->statement->type == CAPTURE_STATEMENT) {
+				logDebugging(_logger, "find_capture_or_import: found CAPTURE_STATEMENT");
+				if (current->statement->capture.interface) {
+					logInformation(_logger, "find_capture_or_import: found capture statement for %s", 
+						current->statement->capture.interface);
+					strncpy(config->filename, current->statement->capture.interface, sizeof(config->filename) - 1);
+					config->filename[sizeof(config->filename) - 1] = '\0'; // Ensure null termination
+					config->is_import = 0;
+					logDebugging(_logger, "find_capture_or_import: returning true for capture");
+					return true;
+				} else {
+					logError(_logger, "find_capture_or_import: capture statement has NULL interface");
+				}
 			}
+		} else {
+			logWarning(_logger, "find_capture_or_import: statement is NULL in list");
+		}
+		current = current->next;
+		logDebugging(_logger, "find_capture_or_import: moving to next statement, current=%p", current);
+	}
+	
+	logDebugging(_logger, "find_capture_or_import: no import or capture statements found");
+	return false;
+}
+
+// Procesa declaraciones de import
+static void process_import_statement(ImportExportStatement* import) {
+	if (!import) return;
+	
+	logInformation(_logger, "Processing import from: %s", import->filename);
+	current_pcap_file = strdup(import->filename);
+}
+
+// Procesa declaraciones de variables
+static void process_variable_declaration(VariableDeclaration* var_decl) {
+	if (!var_decl) return;
+	
+	logInformation(_logger, "Processing variable declaration: %s", var_decl->identifier);
+	// TODO: Implementar almacenamiento de variables
+}
+
+// Evalúa una condición contra un paquete
+static bool evaluate_condition(Condition* condition, PacketInfo* packet) {
+	if (!condition || !packet) {
+		logError(_logger, "evaluate_condition: condition o packet es NULL");
+		return false;
+	}
+	logDebugging(_logger, "evaluate_condition: type=%d", condition->type);
+	switch (condition->type) {
+		case COMPARISON: {
+			double left_val, right_val;
+			if (evaluate_expression(condition->comparison.left, packet, &left_val) &&
+				evaluate_expression(condition->comparison.right, packet, &right_val)) {
+				switch (condition->comparison.op) {
+					case EQUALS_OP: return left_val == right_val;
+					case NOT_EQUALS_OP: return left_val != right_val;
+					case LESS_THAN_OP: return left_val < right_val;
+					case GREATER_THAN_OP: return left_val > right_val;
+					case GREATER_THAN_OR_EQUALS_OP: return left_val >= right_val;
+					case LESS_THAN_OR_EQUALS_OP: return left_val <= right_val;
+					default: return false;
+				}
+			}
+			logWarning(_logger, "evaluate_condition: No se pudo evaluar una comparación");
+			return false;
+		}
+		case LOGICAL_AND:
+			return evaluate_condition(condition->logical.left, packet) &&
+				   evaluate_condition(condition->logical.right, packet);
+		case LOGICAL_OR:
+			return evaluate_condition(condition->logical.left, packet) ||
+				   evaluate_condition(condition->logical.right, packet);
+		default:
+			logWarning(_logger, "evaluate_condition: Tipo de condición no soportado: %d", condition->type);
+			return false;
+	}
+}
+
+// Evalúa una expresión contra un paquete
+static bool evaluate_expression(Expression* expr, PacketInfo* packet, double* result) {
+	if (!expr || !packet || !result) {
+		logError(_logger, "evaluate_expression: expr, packet o result es NULL");
+		return false;
+	}
+	logDebugging(_logger, "evaluate_expression: type=%d", expr->type);
+	switch (expr->type) {
+		case FACTOR:
+			return evaluate_factor(expr->factor, packet, result);
+		case ADDITION: {
+			double left_val, right_val;
+			if (evaluate_expression(expr->leftExpression, packet, &left_val) &&
+				evaluate_expression(expr->rightExpression, packet, &right_val)) {
+				*result = left_val + right_val;
+				return true;
+			}
+			logWarning(_logger, "evaluate_expression: No se pudo evaluar suma");
+			return false;
+		}
+		case SUBTRACTION: {
+			double left_val, right_val;
+			if (evaluate_expression(expr->leftExpression, packet, &left_val) &&
+				evaluate_expression(expr->rightExpression, packet, &right_val)) {
+				*result = left_val - right_val;
+				return true;
+			}
+			logWarning(_logger, "evaluate_expression: No se pudo evaluar resta");
+			return false;
+		}
+		case MULTIPLICATION: {
+			double left_val, right_val;
+			if (evaluate_expression(expr->leftExpression, packet, &left_val) &&
+				evaluate_expression(expr->rightExpression, packet, &right_val)) {
+				*result = left_val * right_val;
+				return true;
+			}
+			logWarning(_logger, "evaluate_expression: No se pudo evaluar multiplicación");
+			return false;
+		}
+		case DIVISION: {
+			double left_val, right_val;
+			if (evaluate_expression(expr->leftExpression, packet, &left_val) &&
+				evaluate_expression(expr->rightExpression, packet, &right_val)) {
+				if (right_val != 0) {
+					*result = left_val / right_val;
+					return true;
+				}
+			}
+			logWarning(_logger, "evaluate_expression: No se pudo evaluar división");
+			return false;
+		}
+		default:
+			logWarning(_logger, "evaluate_expression: Tipo de expresión no soportado: %d", expr->type);
+			return false;
+	}
+}
+
+// Evalúa un factor contra un paquete
+static bool evaluate_factor(Factor* factor, PacketInfo* packet, double* result) {
+	if (!factor || !packet || !result) return false;
+	
+	switch (factor->type) {
+		case CONSTANT:
+			if (factor->constant && factor->constant->value.type == INTEGER_TYPE) {
+				*result = (double)factor->constant->value.integer;
+				return true;
+			}
+			return false;
+		case FIELD:
+			return evaluate_field(factor->field, packet, result);
+		case VARIABLE_REFERENCE:
+			// TODO: Implementar referencia a variables
+			return false;
+		default:
+			return false;
+	}
+}
+
+// Evalúa un campo contra un paquete
+static bool evaluate_field(Field* field, PacketInfo* packet, double* result) {
+	if (!field || !packet || !result) {
+		logError(_logger, "evaluate_field: field, packet o result es NULL");
+		return false;
+	}
+	if (!field->protocol || !field->name) {
+		logError(_logger, "evaluate_field: field->protocol o field->name es NULL");
+		return false;
+	}
+	logDebugging(_logger, "evaluate_field: protocol='%s', name='%s'", field->protocol, field->name);
+
+	if (strcmp(field->protocol, "ip") == 0) {
+		if (strcmp(field->name, "src_addr") == 0) {
+			// Para comparaciones de IP, usar hash simple
+			*result = (double)(packet->src_ip[0] + packet->src_ip[1] + packet->src_ip[2] + packet->src_ip[3]);
+			return true;
+		}
+	} else if (strcmp(field->protocol, "http") == 0) {
+		if (strcmp(field->name, "response_code") == 0) {
+			*result = (double)packet->http_response_code;
+			return true;
+		}
+	} else if (strcmp(field->protocol, "tcp") == 0) {
+		if (strcmp(field->name, "src_port") == 0) {
+			*result = (double)packet->src_port;
+			return true;
+		} else if (strcmp(field->name, "dst_port") == 0) {
+			*result = (double)packet->dst_port;
+			return true;
 		}
 	}
-	fprintf(out, "<h3>HTTP 5xx Errors by Source IP</h3>\n<table class='table'><thead><tr><th>Source IP</th><th>Errors</th></tr></thead><tbody>\n");
-	for (Group* g = groups; g; g = g->next) {
-		fprintf(out, "<tr><td>%s</td><td>%d</td></tr>\n", g->src_ip, g->error_count);
+	logWarning(_logger, "evaluate_field: Campo no soportado protocol='%s', name='%s'", field->protocol, field->name);
+	return false;
+}
+
+// Procesa los resultados agrupados
+static void process_group_by_results(void) {
+	logDebugging(_logger, "process_group_by_results: inicio");
+	if (!current_group_fields) {
+		logWarning(_logger, "process_group_by_results: current_group_fields es NULL");
+		return;
 	}
-	fprintf(out, "</tbody></table>\n");
-	// Liberar grupos
-	while (groups) {
-		Group* next = groups->next;
-		free(groups);
-		groups = next;
+	if (!packet_list_head) {
+		logWarning(_logger, "process_group_by_results: packet_list_head es NULL (no hay paquetes)");
+		return;
 	}
+	// Build group-by results table (ip.src_addr, count)
+	const char* headers[] = {"ip.src_addr", "Count"};
+	// Count groups
+	int group_count = 0;
+	struct { char ip[64]; int count; } groups[128];
+	memset(groups, 0, sizeof(groups));
+	// Simple grouping logic (for demonstration)
+	PacketInfo* pkt = packet_list_head;
+	while (pkt) {
+		int found = 0;
+		for (int i = 0; i < group_count; ++i) {
+			if (strcmp(groups[i].ip, pkt->src_ip) == 0) {
+				groups[i].count++;
+				found = 1;
+				break;
+			}
+		}
+		if (!found && group_count < 128) {
+			strncpy(groups[group_count].ip, pkt->src_ip, 63);
+			groups[group_count].ip[63] = '\0';
+			groups[group_count].count = 1;
+			group_count++;
+		}
+		pkt = pkt->next;
+	}
+	// Build rows for the table
+	const char*** rows = malloc(group_count * sizeof(char**));
+	for (int i = 0; i < group_count; ++i) {
+		char** row = malloc(2 * sizeof(char*));
+		row[0] = strdup(groups[i].ip);
+		char* count_str = malloc(16);
+		snprintf(count_str, 16, "%d", groups[i].count);
+		row[1] = count_str;
+		rows[i] = (const char**)row;
+	}
+	html_add_simple_table(headers, 2, rows, group_count);
+	// Free rows
+	for (int i = 0; i < group_count; ++i) {
+		free((void*)rows[i][0]);
+		free((void*)rows[i][1]);
+		free((void*)rows[i]);
+	}
+	free(rows);
 }
 
 /**
@@ -356,16 +712,23 @@ static void _processStatement(Statement * statement) {
 			_processAlertStatement(&statement->alert);
 			break;
 		case IMPORT_STATEMENT:
-			// Process import statement
-			logInformation(_logger, "Processing import from: %s", statement->import_export.filename);
+			process_import_statement(&statement->import_export);
 			break;
 		case EXPORT_STATEMENT:
 			// Process export statement
 			logInformation(_logger, "Processing export to: %s", statement->import_export.filename);
 			break;
+		case VARIABLE_DECLARATION_STATEMENT:
+			process_variable_declaration(&statement->variable_declaration);
+			break;
 		default:
 			logWarning(_logger, "Unsupported statement type: %d", statement->type);
 			break;
+	}
+	
+	// Process group statement if present (it's a separate field, not a statement type)
+	if (statement->group.group_fields) {
+		_processGroupStatement(&statement->group);
 	}
 }
 
@@ -376,12 +739,12 @@ static void _processCaptureStatement(CaptureStatement * capture) {
 	if (!capture) return;
 	
 	logInformation(_logger, "Processing capture from: %s", capture->interface);
+	current_pcap_file = strdup(capture->interface);
 	
-	// Simulate packet processing
-	_packetCount = 1000; // Simulated packet count
-	_httpErrors = 45;     // Simulated HTTP errors
-	_tcpConnections = 150; // Simulated TCP connections
-	_udpPackets = 200;    // Simulated UDP packets
+	// Configurar filtro si existe
+	if (capture->filter) {
+		current_filter = strdup(""); // TODO: Convertir condición a string BPF
+	}
 }
 
 /**
@@ -391,6 +754,12 @@ static void _processExtractStatement(ExtractStatement * extract) {
 	if (!extract) return;
 	
 	logInformation(_logger, "Processing extract statement");
+	current_extract_fields = extract->fields;
+	
+	// Configurar condición WHERE si existe
+	if (extract->filter) {
+		current_where_condition = extract->filter;
+	}
 	
 	// Process field list
 	FieldList* current = extract->fields;
@@ -410,6 +779,7 @@ static void _processFilterStatement(FilterStatement * filter) {
 	if (!filter) return;
 	
 	logInformation(_logger, "Processing filter statement");
+	current_where_condition = filter->condition;
 	
 	// Process filter condition
 	if (filter->condition) {
@@ -441,6 +811,8 @@ static void _processGroupStatement(GroupStatement * group) {
 	if (!group) return;
 	
 	logInformation(_logger, "Processing group statement");
+	current_group_fields = group->group_fields;
+	current_having_condition = group->having;
 	
 	// Process group fields
 	FieldList* current = group->group_fields;
@@ -458,6 +830,8 @@ static void _processGroupStatement(GroupStatement * group) {
  */
 static void _processAggregation(Expression * expression) {
 	if (!expression) return;
+	
+	current_aggregation = expression;
 	
 	switch (expression->type) {
 		case AGGREGATION_COUNT:
@@ -489,7 +863,7 @@ static char * _indentation(const unsigned int level) {
 }
 
 /**
- * Outputs a formatted string to the HTML file.
+ * Outputs a formatted string to stdout.
  */
 static void _output(const unsigned int indentationLevel, const char * const format, ...) {
 	va_list arguments;
@@ -497,13 +871,8 @@ static void _output(const unsigned int indentationLevel, const char * const form
 	char * indentation = _indentation(indentationLevel);
 	char * effectiveFormat = concatenate(2, indentation, format);
 	
-	if (_htmlFile) {
-		vfprintf(_htmlFile, effectiveFormat, arguments);
-		fflush(_htmlFile);
-	} else {
-		vfprintf(stdout, effectiveFormat, arguments);
-		fflush(stdout);
-	}
+	vfprintf(stdout, effectiveFormat, arguments);
+	fflush(stdout);
 	
 	free(effectiveFormat);
 	free(indentation);
@@ -512,16 +881,52 @@ static void _output(const unsigned int indentationLevel, const char * const form
 
 /** PUBLIC FUNCTIONS */
 
-void generate(CompilerState * compilerState) {
-	logDebugging(_logger, "Generating HTML output...");
+void generate(CompilerState * compilerState, const char* dsl_filename) {
+	printf("DEBUG: Entering generate function\n");
 	
-	// Open HTML file for output
-	_htmlFile = fopen("output.html", "w");
-	if (!_htmlFile) {
-		logError(_logger, "Failed to open output.html for writing");
+	logDebugging(_logger, "Generating HTML output...");
+
+	// Check if compilerState is valid
+	if (!compilerState) {
+		printf("DEBUG: compilerState is NULL\n");
+		logError(_logger, "compilerState is NULL");
 		return;
 	}
 	
+	if (!compilerState->abstractSyntaxtTree) {
+		printf("DEBUG: abstractSyntaxtTree is NULL\n");
+		logError(_logger, "abstractSyntaxtTree is NULL");
+		return;
+	}
+	
+	Program* program = (Program*)compilerState->abstractSyntaxtTree;
+	printf("DEBUG: program=%p\n", program);
+	logDebugging(_logger, "compilerState->abstractSyntaxtTree=%p", compilerState->abstractSyntaxtTree);
+	logDebugging(_logger, "program->statements=%p", program->statements);
+
+	// Initialize HTML dashboard properly
+	printf("DEBUG: About to initialize HTML dashboard\n");
+	logDebugging(_logger, "About to initialize HTML dashboard...");
+	if (html_init_dashboard("output.html", "Verm Network Analysis Report") != 0) {
+		printf("DEBUG: Failed to initialize HTML dashboard\n");
+		logError(_logger, "Failed to initialize HTML dashboard");
+		return;
+	}
+	printf("DEBUG: HTML dashboard initialized successfully\n");
+	logDebugging(_logger, "HTML dashboard initialized successfully");
+
+	// Read DSL file and include in HTML
+	if (dsl_filename) {
+		printf("DEBUG: Reading DSL file: %s\n", dsl_filename);
+		logDebugging(_logger, "Reading DSL file: %s", dsl_filename);
+		char* dsl = read_dsl_file(dsl_filename);
+		if (dsl) {
+			html_add_query_section(dsl);
+			logDebugging(_logger, "Added query section to HTML");
+			free(dsl);
+		}
+	}
+
 	// Inicializar métricas
 	_packetCount = 0;
 	_httpErrors = 0;
@@ -530,30 +935,156 @@ void generate(CompilerState * compilerState) {
 
 	// Buscar import/capture y procesar tráfico real
 	CaptureConfig config;
-	if (find_capture_or_import(compilerState->abstractSyntaxtTree, &config)) {
-		PcapContext ctx;
-		if (init_pcap_context(&ctx, config.filename, config.filter) == 0) {
-			process_packets(&ctx, real_packet_handler);
-			cleanup_pcap_context(&ctx);
+	memset(&config, 0, sizeof(config));
+	printf("DEBUG: Searching for import/capture statements\n");
+	logDebugging(_logger, "Searching for import/capture statements...");
+	if (find_capture_or_import(program, &config)) {
+		printf("DEBUG: Found import/capture: %s\n", config.filename);
+		logInformation(_logger, "Found %s: %s", config.is_import ? "import" : "capture", config.filename);
+		logDebugging(_logger, "Trying to open PCAP file: %s", config.filename);
+		FILE* test_file = fopen(config.filename, "rb");
+		if (!test_file) {
+			printf("DEBUG: PCAP file does not exist: %s\n", config.filename);
+			logError(_logger, "PCAP file does not exist or cannot be opened: %s", config.filename);
 		} else {
-			logError(_logger, "No se pudo inicializar el contexto de captura/import para %s", config.filename);
+			fclose(test_file);
+			printf("DEBUG: PCAP file exists, initializing context\n");
+			logDebugging(_logger, "PCAP file exists, initializing context...");
+			PcapContext ctx;
+			if (init_pcap_context(&ctx, config.filename, config.filter) == 0) {
+				printf("DEBUG: PCAP context initialized, processing packets\n");
+				logDebugging(_logger, "PCAP context initialized, about to process packets");
+				process_packets(&ctx, real_packet_handler);
+				printf("DEBUG: Finished processing packets\n");
+				logDebugging(_logger, "Finished processing packets");
+				cleanup_pcap_context(&ctx);
+				logDebugging(_logger, "Cleaned up PCAP context");
+			} else {
+				printf("DEBUG: Failed to initialize PCAP context\n");
+				logError(_logger, "Failed to initialize PCAP context for %s", config.filename);
+			}
 		}
 	} else {
-		logWarning(_logger, "No se encontró import ni capture en el programa. No se procesará tráfico real.");
+		printf("DEBUG: No import/capture found\n");
+		logWarning(_logger, "No import nor capture found in program. No real traffic will be processed.");
 	}
+	printf("DEBUG: After packet processing\n");
+	logDebugging(_logger, "After packet processing");
 
-	// Generar HTML
-	_generateHtmlHeader();
-	_processProgram(compilerState->abstractSyntaxtTree);
-	_generateMetrics();
-	_generateTables();
-	// Ejemplo: tabla de errores HTTP agrupados por src_ip
-	group_and_count_errors_by_src_ip(_htmlFile);
-	_generateHtmlFooter();
+	printf("DEBUG: Building group-by table. packet_list_head=%p\n", packet_list_head);
+	logDebugging(_logger, "Building group-by table. packet_list_head=%p", packet_list_head);
+	if (!packet_list_head) {
+		printf("DEBUG: No packets to process\n");
+		logWarning(_logger, "No packets to process for group-by table.");
+		html_add_section("Results", "<p>No packets found in the PCAP file.</p>");
+		html_close_dashboard();
+		return;
+	}
 	
-	// Close file
-	fclose(_htmlFile);
-	_htmlFile = NULL;
+	// Build group-by results table (ip.src_addr, count)
+	printf("DEBUG: Starting to build group-by table\n");
+	logDebugging(_logger, "Starting to build group-by table...");
+	const char* headers[] = {"ip.src_addr", "Count"};
+	int group_count = 0;
+	struct { char ip[64]; int count; } groups[128];
+	memset(groups, 0, sizeof(groups));
+	PacketInfo* pkt = packet_list_head;
+	while (pkt) {
+		int found = 0;
+		for (int i = 0; i < group_count; ++i) {
+			if (strcmp(groups[i].ip, pkt->src_ip) == 0) {
+				groups[i].count++;
+				found = 1;
+				break;
+			}
+		}
+		if (!found && group_count < 128) {
+			strncpy(groups[group_count].ip, pkt->src_ip, 63);
+			groups[group_count].ip[63] = '\0';
+			groups[group_count].count = 1;
+			group_count++;
+		}
+		pkt = pkt->next;
+	}
+	printf("DEBUG: Group count: %d\n", group_count);
+	logDebugging(_logger, "Group count: %d", group_count);
 	
+	if (group_count == 0) {
+		printf("DEBUG: No groups found\n");
+		logWarning(_logger, "No groups found for group-by table.");
+		html_add_section("Results", "<p>No group-by results to display.</p>");
+		html_close_dashboard();
+		return;
+	}
+	
+	printf("DEBUG: Allocating memory for rows\n");
+	logDebugging(_logger, "Allocating memory for rows...");
+	const char*** rows = malloc(group_count * sizeof(char**));
+	if (!rows) {
+		printf("DEBUG: Failed to allocate memory for rows\n");
+		logError(_logger, "Failed to allocate memory for rows");
+		html_close_dashboard();
+		return;
+	}
+	
+	printf("DEBUG: Building rows\n");
+	logDebugging(_logger, "Building rows...");
+	for (int i = 0; i < group_count; ++i) {
+		char** row = malloc(2 * sizeof(char*));
+		if (!row) {
+			printf("DEBUG: Failed to allocate memory for row %d\n", i);
+			logError(_logger, "Failed to allocate memory for row %d", i);
+			// Clean up previously allocated rows
+			for (int j = 0; j < i; ++j) {
+				free((void*)rows[j][0]);
+				free((void*)rows[j][1]);
+				free((void*)rows[j]);
+			}
+			free(rows);
+			html_close_dashboard();
+			return;
+		}
+		row[0] = strdup(groups[i].ip);
+		char* count_str = malloc(16);
+		if (!row[0] || !count_str) {
+			printf("DEBUG: Failed to allocate memory for row data %d\n", i);
+			logError(_logger, "Failed to allocate memory for row data %d", i);
+			free(row);
+			// Clean up previously allocated rows
+			for (int j = 0; j < i; ++j) {
+				free((void*)rows[j][0]);
+				free((void*)rows[j][1]);
+				free((void*)rows[j]);
+			}
+			free(rows);
+			html_close_dashboard();
+			return;
+		}
+		snprintf(count_str, 16, "%d", groups[i].count);
+		row[1] = count_str;
+		rows[i] = (const char**)row;
+	}
+	
+	printf("DEBUG: Adding table to HTML\n");
+	logDebugging(_logger, "Adding table to HTML...");
+	html_add_simple_table(headers, 2, rows, group_count);
+	printf("DEBUG: Added group-by table to HTML\n");
+	logDebugging(_logger, "Added group-by table to HTML");
+	
+	// Clean up memory
+	printf("DEBUG: Cleaning up memory\n");
+	logDebugging(_logger, "Cleaning up memory...");
+	for (int i = 0; i < group_count; ++i) {
+		free((void*)rows[i][0]);
+		free((void*)rows[i][1]);
+		free((void*)rows[i]);
+	}
+	free(rows);
+
+	// Close HTML dashboard
+	printf("DEBUG: Closing HTML dashboard\n");
+	logDebugging(_logger, "Closing HTML dashboard...");
+	html_close_dashboard();
+	printf("DEBUG: HTML generation completed\n");
 	logDebugging(_logger, "HTML generation completed. Output saved to output.html");
 }

@@ -284,12 +284,12 @@ Program* MultiStatementProgramSemanticAction(CompilerState* state, Program* prog
 }
 
 
-Field* FieldSemanticAction(char* name, char* protocol) {
+Field* FieldSemanticAction(char* protocol, char* name) {
     _logSyntacticAnalyzerAction(__FUNCTION__);
     Field* field = calloc(1, sizeof(Field));
     printf("[CREATE] Field @ %p (protocol='%s', name='%s')\n", field, protocol, name);
-    field->name = name;
     field->protocol = protocol;
+    field->name = name;
     return field;
 }
 

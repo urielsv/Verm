@@ -312,6 +312,28 @@ int html_add_alert(const char* title, const char* message, const char* severity)
     return 0;
 }
 
+int html_add_query_section(const char* dsl_query) {
+    if (!html_file || !dsl_query) return -1;
+    fprintf(html_file, "<h2>Query</h2><pre>%s</pre>\n", dsl_query);
+    return 0;
+}
+
+int html_add_simple_table(const char** headers, int header_count, const char*** rows, int row_count) {
+    if (!html_file || !headers || header_count <= 0) return -1;
+    fprintf(html_file, "<h2>Results</h2><table><tr>");
+    for (int i = 0; i < header_count; ++i)
+        fprintf(html_file, "<th>%s</th>", headers[i]);
+    fprintf(html_file, "</tr>\n");
+    for (int r = 0; r < row_count; ++r) {
+        fprintf(html_file, "<tr>");
+        for (int c = 0; c < header_count; ++c)
+            fprintf(html_file, "<td>%s</td>", rows[r][c]);
+        fprintf(html_file, "</tr>\n");
+    }
+    fprintf(html_file, "</table>\n");
+    return 0;
+}
+
 int html_close_dashboard() {
     if (!html_file) {
         return -1;

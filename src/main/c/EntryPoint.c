@@ -15,6 +15,16 @@
  * find you, and I will kill you (Bryan Mills; "Taken", 2008).
  */
 int main(const int count, const char ** arguments) {
+	if (count > 1) {
+		FILE* f = fopen(arguments[1], "r");
+		if (!f) {
+			fprintf(stderr, "No se pudo abrir el archivo: %s\n", arguments[1]);
+			return 1;
+		}
+		fclose(stdin); 
+		stdin = f;     
+	}
+
 	Logger * logger = createLogger("EntryPoint");
 	initializeFlexActionsModule();
 	initializeBisonActionsModule();
@@ -44,7 +54,8 @@ int main(const int count, const char ** arguments) {
 		ComputationResult computationResult = computeStatementList(program->statements);
 		if (computationResult.succeed) {
 			compilerState.value = computationResult.value;
-			generate(&compilerState);
+			const char* dsl_filename = (count > 1) ? arguments[1] : NULL;
+			generate(&compilerState, dsl_filename);
 		}
 		else {
 			logError(logger, "The computation phase rejects the input program.");

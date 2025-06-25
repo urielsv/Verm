@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 int init_pcap_context(PcapContext* ctx, char* filename, char* filter) {
+    logDebugging(NULL, "init_pcap_context: called with ctx=%p, filename=%s, filter=%s", ctx, filename, filter ? filter : "(null)");
     if (!ctx || !filename) {
         logError(NULL, "Invalid parameters for PCAP context initialization");
         return -1;
@@ -16,10 +17,12 @@ int init_pcap_context(PcapContext* ctx, char* filename, char* filter) {
     ctx->handle = NULL;
     ctx->filter_str = filter ? strdup(filter) : NULL;
     memset(&ctx->filter, 0, sizeof(ctx->filter));
+    logDebugging(NULL, "init_pcap_context: context initialized, about to open file");
     
     // Open PCAP file
     char errbuf[PCAP_ERRBUF_SIZE];
     ctx->handle = pcap_open_offline(filename, errbuf);
+    logDebugging(NULL, "init_pcap_context: after pcap_open_offline, handle=%p", ctx->handle);
     if (!ctx->handle) {
         logError(NULL, "Failed to open PCAP file: %s", errbuf);
         return -1;
@@ -27,6 +30,7 @@ int init_pcap_context(PcapContext* ctx, char* filename, char* filter) {
     
     // Compile filter if provided
     if (filter && strlen(filter) > 0) {
+        logDebugging(NULL, "init_pcap_context: compiling filter: %s", filter);
         if (pcap_compile(ctx->handle, &ctx->filter, filter, 0, PCAP_NETMASK_UNKNOWN) != 0) {
             logError(NULL, "Failed to compile BPF filter: %s", pcap_geterr(ctx->handle));
             return -1;

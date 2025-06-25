@@ -5,6 +5,9 @@ cmake_minimum_required(VERSION 3.22)
 # Name of the project and language to use (C, in this case).
 project(Compiler C)
 
+# Set debug build type
+set(CMAKE_BUILD_TYPE Debug)
+
 # Debug: Print the actual compiler ID
 message(STATUS "Detected compiler ID: ${CMAKE_C_COMPILER_ID}")
 
@@ -49,8 +52,9 @@ elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
 elseif (CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
 	message(NOTICE "The C compiler is AppleClang.")
 
-	# Options for AppleClang.
-	add_compile_options(-O3)
+	# Options for AppleClang with debug info.
+	add_compile_options(-g)
+	add_compile_options(-O0)
 	add_compile_options(-std=c99)
 	add_compile_options(-Wall)
 	add_compile_options(-Wextra)
@@ -103,7 +107,6 @@ add_executable(Compiler
 	src/main/c/backend/semantic-analysis/SemanticAnalyzer.c
 	src/main/c/backend/semantic-analysis/TypeSystem.c
 	src/main/c/backend/semantic-analysis/SymbolTable.c
-	src/main/c/backend/code-generation/CodeGenerator.c
 	src/main/c/backend/runtime/PcapRuntime.c
 	src/main/c/backend/runtime/HtmlOutput.c
 	src/main/c/backend/runtime/ProtocolExtractors.c

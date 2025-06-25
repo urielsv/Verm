@@ -207,7 +207,7 @@ export_statement:
     ;
 
 field:
-    IDENTIFIER { $$ = FieldSemanticAction($1, NULL); }
+    IDENTIFIER { $$ = FieldSemanticAction(NULL, $1); }
     | IDENTIFIER DOT IDENTIFIER { $$ = FieldSemanticAction($1, $3); }
     ;
 
