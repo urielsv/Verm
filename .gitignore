@@ -31,3 +31,5 @@ Makefile
 install_manifest.txt
 install_manifest_*.txt
 Compiler
+*.pcap
+output.html
